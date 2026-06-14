@@ -1,225 +1,129 @@
-# hPoslovi
+# cJobCreator - Premium Glassmorphic Job & Faction Manager
 
-## 📋 Configuration Guide
-
-### Basic Configuration (`config/config.lua`)
-
-```lua
--- ===========================================
--- DEBUG & LOCALE SETTINGS
--- ===========================================
-Config.Debug = false  -- Set to true for detailed logging
-Config.Locale = 'en'  -- Options: 'en', 'hr'
-
--- ===========================================
--- ADMIN GROUPS
--- ===========================================
-Config.AdminGroups = {
-    'admin',
-    'superadmin',
-    'developer'
-}
-
--- ===========================================
--- COMMANDS
--- ===========================================
-Config.CreateCommand = 'makejob'  -- Command to create new job
-Config.EditCommand = 'editjob'    -- Command to edit existing job
-```
-
-### Changing the Language
-
-**Step-by-Step**:
-1. Open `/config/config.lua`
-2. Locate line: `Config.Locale = 'en'`
-3. Change value:
-   - For English: `Config.Locale = 'en'`
-   - For Croatian: `Config.Locale = 'hr'`
-4. Save the file
-5. Restart the resource: `/restart yourresourcename`
-
-**Important**: The locale file must exist in `/locales/` folder. Available: `en.json`, `hr.json`
-
-### Marker Configuration
-
-```lua
-Config.MarkerType = 21           -- Marker type (21 is default)
-Config.MarkerDrawDistance = 3    -- Distance to see marker
-Config.InteractDistance = 2      -- Distance to interact
-Config.MarkerSize = vector3(0.8, 0.8, 0.8)
-Config.MarkerColor = { r = 255, g = 255, b = 255 }
-```
-
-### Default Grades
-
-When creating a job without specifying grades, these defaults apply:
-
-```lua
-Config.IfNotGrades = {
-    { grade = 0, name = 'recruit', label = 'Recruit', salary = '0' },
-    { grade = 1, name = 'employee', label = 'Employee', salary = '0' },
-    { grade = 2, name = 'manager', label = 'Manager', salary = '0' },
-    { grade = 3, name = 'boss', label = 'Boss', salary = '0' },
-}
-```
+`cJobCreator` is a premium, state-of-the-art job and faction creation system for FiveM (ESX). It replaces standard console/chat menus and basic UI elements with a modern, high-performance, double-pane glassmorphic NUI interface designed following advanced web styling standards (harmony of custom colors, smooth backdrop blurs, and hover micro-animations).
 
 ---
 
 ## 🎯 Key Features
 
-### Wardrobe System
-- **Everyone** can:
-  - Open the ped/outfit menu
-  - Apply saved outfits
-- **Boss grade or higher** can:
-  - Save new outfits
-  - Delete existing outfits
+### 1. Modern Glassmorphic NUI
+- **Double-Pane Layout**: Left-pane sidebar navigation and right-pane action area.
+- **Visual Design**: Curated dark palette with sleek `#00ADED` accents, translucent card components, responsive layouts, and modern typography (`Outfit` font).
+- **Zero Third-Party UI Blockers**: Replaces old dialogs with custom-built HTML overlay modals for inputs, confirmations, and alerts, keeping users fully immersed.
 
-### Boss Menu
-- Accessible to players with grade **≥** boss grade
-- Example: If boss is grade 3, grades 3, 4, 5, etc. can all access it
+### 2. Drag & Drop Grade Reordering
+- **Discord-like Priority Sorting**: Allows administrators to drag and drop grades to rearrange their hierarchical order.
+- **Auto-Recalculation**: Grade indices (0 to N) are dynamically calculated and updated client-to-server instantly upon saving.
+- **CEF-Safe Interaction**: Built using custom mouse-coordinate tracking algorithms to bypass FiveM CEF sandbox restrictions on native HTML5 drag-and-drop API.
 
-### Grade/Rank System
-- Grades are preserved when editing jobs
-- Only change when explicitly modified
-- No more accidental resets!
+### 3. Click-to-Edit Grade Customization
+- **Quick Modals**: Click on any grade within the editor list to open a custom overlay modal.
+- **Full Customizability**: Modify the grade name (system ID), label (display name), and salary directly through the UI.
 
-### Marker System
-- Auto-refreshes after job edits
-- Supports custom textures
-- Permission-based (job + grade required)
+### 4. Dynamic Multi-Language Translation
+- **On-Demand Loading**: Client fetches translation strings from `/locales/*.json` dynamically using native `LoadResourceFile()` and sends them to the UI.
+- **Automatic DOM Compile**: A lightweight jQuery loop parses elements marked with `data-translate` attributes, ensuring 100% translation coverage of NUI screens without client-side lag.
+
+### 5. Configurable Position Markers & Systems
+- **Auto Gridsystem Sync**: Register/unregister marker positions for Wardrobe, Inventories (Stashes), Boss Menus, and Garage access points dynamically.
+- **Illenium Appearance Wardrobe**: Open wardrobes, preview, save, or delete uniforms directly from a shared faction vault (grade-restricted for administrative options).
+- **Database-Stored Faction Garages**: Register vehicles with custom model spawn codes, labels, plate prefixes, colors (RGB), and full engine/suspension modification packages.
 
 ---
 
-## 🔧 Troubleshooting
+## 🔧 Installation & Database Setup
 
-### Issue: Locale not changing
-**Solution**: 
-1. Check spelling: `Config.Locale = 'en'` (lowercase)
-2. Ensure locale file exists: `/locales/en.json`
-3. Restart resource completely
-
-### Issue: Markers not showing
-**Solution**:
-1. Enable debug: `Config.Debug = true`
-2. Check F8 console for marker registration messages
-3. Verify ox_gridsystem is installed
-
-### Issue: Can't save outfits
-**Solution**:
-1. Check your grade is >= boss grade
-2. Verify illenium-appearance is installed
-3. Check server console for errors
-
-### Issue: Jobs not refreshing
-**Solution**:
-- Should work automatically now
-- If not, check `ESX.RefreshJobs()` is being called in server logs (when Debug = true)
+1. **Extract/Move Folder**: Place `cJobCreator` inside your server resources directory (e.g. `[skripte]/cJobCreator`).
+2. **Import Database Schema**: Run the provided `database.sql` script. This sets up the following schema tables:
+   - `hposlovi_jobs` - Faction registration info.
+   - `hposlovi_positions` - Vector3 positions of boss menus, wardrobes, inventories, and garages.
+   - `hposlovi_inventories` - Faction stash sizes, weights, and minimum grade accesses.
+   - `hposlovi_vehicles` - Faction garage fleet configurations.
+   - `hposlovi_outfits` - Saved faction uniforms.
+3. **Configure Dependencies**: Add to your `server.cfg`:
+   ```cfg
+   ensure cJobCreator
+   ```
 
 ---
 
 ## 📦 Dependencies
 
-**Required**:
-- `es_extended` (ESX)
-- `ox_lib`
-- `oxmysql`
-- `ox_inventory`
-- `illenium-appearance`
-- `esx_society`
-- `ox_gridsystem` (for markers)
-
-**Database Tables Required**:
-- `hposlovi_jobs`
-- `hposlovi_positions`
-- `hposlovi_inventories`
-- `hposlovi_vehicles`
-- `hposlovi_outfits`
+- **Framework**: `es_extended` (ESX)
+- **Database**: `oxmysql`
+- **Inventory**: `ox_inventory`
+- **Gridsystem/Markers**: `ox_gridsystem`
+- **Appearance**: `illenium-appearance`
+- **Society**: `esx_society`
+- **Utilities**: `ox_lib`
 
 ---
 
-## 🚀 Installation
+## 📋 Configuration (`config/config.lua`)
 
-1. Extract files to your resources folder
-2. Ensure all dependencies are installed
-3. Import SQL file (if provided)
-4. Add to `server.cfg`:
-   ```
-   ensure yourresourcename
-   ```
-5. Configure `config/config.lua` to your liking
-6. Set your desired locale
-7. Restart server
-
----
-
-## 📝 Commands
-
-- `/makejob` - Create a new job (admin only)
-- `/editjob` - Edit an existing job (admin only)
-
----
-
-## ⚙️ Technical Changes
-
-### Server-Side
-- Added `ESX.RefreshJobs()` after job creation/modification
-- Added `hPoslovi:server:getBossGrade` callback
-- Improved debug logging system
-- Removed references to unsupported systems
-
-### Client-Side
-- Fixed grade checks (changed `==` to `>=`)
-- Added wardrobe callback for boss grade checking
-- Improved marker refresh system
-- Conditional debug logging
-
-### Configuration
-- Simplified to only ESX Society + Illenium Appearance
-- Added `Config.Debug` and `Config.Locale`
-- Better organization and comments
-- Removed legacy/unused options
-
----
-
-## 🎨 Locale System Details
-
-### Structure
-Locales are stored as JSON files in `/locales/` folder:
-- `en.json` - English
-- `hr.json` - Croatian
-
-### Using Locales in Code
 ```lua
-locale('textuibossmenu')  -- Returns translated string
+Config = {}
+
+-- ===========================================
+-- DEBUG & LOCALE SETTINGS
+-- ===========================================
+Config.Debug = false -- Enable detailed console logs
+Config.Locale = 'en' -- Options: 'en', 'hr'
+
+-- ===========================================
+-- MARKER SETTINGS
+-- ===========================================
+Config.MarkerType = 21 -- Set to -1 for custom textures
+Config.MarkerDrawDistance = 3
+Config.InteractDistance = 2
+Config.MarkerSize = vector3(0.8, 0.8, 0.8)
+Config.MarkerColor = { r = 255, g = 255, b = 255 }
+
+-- Default fallback grades if none are defined during job creation
+Config.IfNotGrades =  {
+    { grade = 0, name = 'recruit', label = 'Recruit', salary = '1000' },
+    { grade = 1, name = 'officer', label = 'Officer', salary = '2000' },
+    { grade = 2, name = 'sergeant', label = 'Sergeant', salary = '2500' },
+    { grade = 3, name = 'lieutenant', label = 'Lieutenant', salary = '3000' },
+    { grade = 4, name = 'boss', label = 'Chief', salary = '3500' },
+}
+
+-- Commands
+Config.CreateCommand = 'makejob'
+Config.EditCommand = 'editjob'
+Config.AutoSetJob = true -- Auto-set job of the creator to the new faction
+
+-- Permitted admins (checks player group against this list)
+Config.AdminGroups = {
+    'superadmin',
+    'developer'
+}
 ```
 
-### Adding New Translations
-1. Create new file in `/locales/` (e.g., `de.json` for German)
-2. Copy structure from `en.json`
-3. Translate all strings
-4. Set `Config.Locale = 'de'` in config
+---
+
+## 📝 Administrative Commands
+
+* **`/makejob`**: Opens the NUI Creator screen to register a new faction/job.
+* **`/editjob`**: Opens the NUI Job Manager screen where you can select, modify, or permanently delete registered factions.
 
 ---
 
-## 📧 Support
+## 🎨 Translation / Localization System
 
-If you encounter issues:
-1. Enable debug mode: `Config.Debug = true`
-2. Check F8 console and server console
-3. Verify all dependencies are up to date
-4. Check that locale files exist
+Locales are loaded directly from the `locales/` directory:
+- `en.json` (English)
+- `hr.json` (Croatian)
 
----
-
-## 🎉 Credits
-
-- Original Script: nxs-dev
-- Heaviely modified by: chiaroscuric using Claude
-- Testing: Hugo Roleplay Staff
+### Adding a New Language
+1. Create a new `.json` file in `/locales/` (e.g. `de.json`).
+2. Translate all key-value mappings matching the structure in `en.json`.
+3. Set `Config.Locale = 'de'` in `config/config.lua`.
 
 ---
 
-**Version**: 1.0  
-**Release Date**: January 30, 2026  
-**Status**: Stable Release
+## 🛠️ Developer Technical Notes
+
+- **ESX society integration**: Triggered via `YourBossmenuFunc` custom configurations in `config.lua` or server events calling `esx_society:openBossMenu`.
+- **Illenium wardrobe handler**: Dynamic grade evaluation reads positions from the database first, confirms permissions, and opens wardrobes using `illenium-appearance` API hooks.
+- **Refresh Flow**: Creating or modifying a job auto-executes `ESX.RefreshJobs()` and triggers `hPoslovi:client:refreshJobs` globally to redraw and synchronize markers on all clients.

@@ -45,7 +45,7 @@
                 "grade": 3,
                 "name": "zamjenik",
                 "icon": "fa-user",
-                "label": "Zamjenik",
+                "label": "Zamenik",
                 "salary": 1,
                 "iconColor": "#00ADED"
             },
@@ -53,7 +53,7 @@
                 "grade": 4,
                 "name": "boss",
                 "icon": "fa-user",
-                "label": "Boss",
+                "label": "Sef",
                 "salary": 2,
                 "iconColor": "#00ADED"
             },

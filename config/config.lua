@@ -7,12 +7,6 @@ Config.Debug = false -- Set to true to enable debug console logs
 Config.Locale = 'en' -- Available: 'en', 'hr'
 
 -- ===========================================
--- MENU SETTINGS
--- ===========================================
-Config.IconColor = '#00ADED'
-Config.MenuPosition = 'top-right'
-
--- ===========================================
 -- MARKER SETTINGS
 -- ===========================================
 Config.MarkerType = 21 -- Set to -1 for custom markers
@@ -53,27 +47,13 @@ Config.AutoSetJob = true
 -- Admin groups that can use job creation/editing
 Config.AdminGroups = {
     'admin',
+    'superadmin',
     'developer'
 }
 
 -- ===========================================
--- INTEGRATION SETTINGS
--- ===========================================
-
--- Wardrobe System: Only 'illenium-appearance' supported
-Config.WardrobeSystem = 'illenium-appearance'
-
--- Boss Menu System: Only 'esx_society' supported
-Config.BossMenuSystem = 'esx_society'
-
--- ===========================================
 -- FUNCTIONS
 -- ===========================================
-
--- Wardrobe Function (illenium-appearance only)
-YourWardRobeFunc = function(job)
-    exports['illenium-appearance']:openWardrobe()
-end
 
 -- Boss Menu Function (esx_society only)
 YourBossmenuFunc = function(job)
@@ -101,5 +81,4 @@ end
 Notify = function(msg)
     ESX.ShowNotification(msg)
 end
-
 

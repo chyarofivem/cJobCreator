@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hPoslovi - Unified Job Interface</title>
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome 6.4.0 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Style Sheet -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- jQuery for simple manipulations -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <div class="ui" style="display: none;">
+        <!-- Unified Main Container -->
+        <div class="main-container">
+
+            <!-- Left Pane (Sidebar) -->
+            <div class="sidebar-pane">
+                <div class="sidebar-header">
+                    <div class="sidebar-icon">
+                        <i class="fa-solid fa-briefcase" id="main-icon"></i>
+                    </div>
+                    <div class="sidebar-title-info">
+                        <h2 id="sidebar-main-title" data-translate="fazione">Frazione</h2>
+                        <span id="sidebar-sub-title" data-translate="sidebar_creator_desc">Upravljanje poslom</span>
+                    </div>
+                </div>
+
+                <!-- Creator Navigation Tabs (Only visible in Creator Mode) -->
+                <div class="sidebar-tabs" id="creator-tabs">
+                    <button class="tab-btn active" data-tab="general">
+                        <i class="fa-solid fa-gears"></i>
+                        <span data-translate="general">Generalno</span>
+                    </button>
+                    <button class="tab-btn" data-tab="inventories">
+                        <i class="fa-solid fa-box-archive"></i>
+                        <span data-translate="inv">Skladišta</span>
+                    </button>
+                    <button class="tab-btn" data-tab="garage">
+                        <i class="fa-solid fa-warehouse"></i>
+                        <span data-translate="garage">Garaža</span>
+                    </button>
+                    <button class="tab-btn" data-tab="grades">
+                        <i class="fa-solid fa-crown"></i>
+                        <span data-translate="gradi">Rangovi</span>
+                    </button>
+                    <button class="tab-btn" data-tab="finish">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span data-translate="conferma">Završi</span>
+                    </button>
+                </div>
+
+                <!-- Garage/Wardrobe Sidebar Content (Only visible in their respective modes) -->
+                <div class="sidebar-info-box" id="sidebar-mode-info" style="display: none;">
+                    <p id="sidebar-mode-desc" data-translate="sidebar_mode_desc">Odaberite neku od opcija.</p>
+                </div>
+
+                <!-- Sidebar Footer Actions (Close Button) -->
+                <div class="sidebar-footer">
+                    <button class="btn btn-secondary btn-full" id="close-ui-btn">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                        <span id="close-text" data-translate="btn_close">Zatvori</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Pane (Content Area) -->
+            <div class="content-pane">
+
+                <!-- CREATOR MODE - GENERAL TAB -->
+                <div class="tab-content active" id="tab-general">
+                    <h1 class="panel-title" data-translate="creator_general_title">Opće Postavke Posla</h1>
+                    <p class="panel-desc" data-translate="creator_general_desc">Konfigurirajte osnovne informacije o
+                        frakciji, poziciju boss izbornika i ormara.</p>
+
+                    <div class="form-group">
+                        <label for="job-name" data-translate="job_name_label">Naziv Posla (ID za setjob)</label>
+                        <input type="text" id="job-name" placeholder="npr. mafija, policija..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="job-label" data-translate="job_label_label">Prikazano Ime Posla</label>
+                        <input type="text" id="job-label" placeholder="npr. Los Santos Police Dept" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="boss-grade" data-translate="boss_grade_label">Minimalni Rang za Boss
+                            Izbornik</label>
+                        <input type="number" id="boss-grade" value="4" min="0" required>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="card card-action" id="set-bossmenu-coords">
+                            <div class="card-icon"><i class="fa-solid fa-user-tie"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="bossmenu_coords_title">Pozicija Boss Izbornika</h3>
+                                <span class="coords-display" id="bossmenu-coords" data-translate="not_set">Nije
+                                    postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="set_here">Postavi Ovdje</button>
+                        </div>
+
+                        <div class="card card-action" id="set-wardrobe-coords">
+                            <div class="card-icon"><i class="fa-solid fa-shirt"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="wardrobe_coords_title">Pozicija Garderobe</h3>
+                                <span class="coords-display" id="wardrobe-coords" data-translate="not_set">Nije
+                                    postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="set_here">Postavi Ovdje</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CREATOR MODE - INVENTORIES TAB -->
+                <div class="tab-content" id="tab-inventories">
+                    <h1 class="panel-title" data-translate="creator_inv_title">Upravljanje Skladištima</h1>
+                    <p class="panel-desc" data-translate="creator_inv_desc">Dodajte skladišne ormariće na vašoj lokaciji
+                        ili uklonite postojeće stasheve.</p>
+
+                    <div class="list-section">
+                        <h3 data-translate="current_invs">Trenutna Skladišta</h3>
+                        <div class="list-items" id="inventory-list">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+
+                    <div class="form-add-section card">
+                        <h3 data-translate="add_new_inv"><i class="fa-solid fa-plus-circle"></i> Dodaj Novo Skladište
+                        </h3>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label data-translate="nomedep">Naziv Skladišta</label>
+                                <input type="text" id="inv-label" placeholder="Skladište 1">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="weight_kg">Težina (kg)</label>
+                                <input type="number" id="inv-weight" value="100">
+                            </div>
+                        </div>
+                        <div class="grid-2 mt-10">
+                            <div class="form-group">
+                                <label data-translate="slots">Broj Slotova</label>
+                                <input type="number" id="inv-slots" value="50">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="gradomin">Minimalni Rang</label>
+                                <input type="number" id="inv-grade" value="0">
+                            </div>
+                        </div>
+                        <div class="mt-15 flex-between align-center">
+                            <span class="coords-display" id="inv-coords" data-translate="not_set">Pozicija: Nije
+                                postavljena</span>
+                            <div class="flex-gap">
+                                <button class="btn btn-secondary btn-sm" id="set-inv-coords"
+                                    data-translate="set_position">Postavi Poziciju</button>
+                                <button class="btn btn-primary btn-sm" id="add-inv-btn"
+                                    data-translate="btn_add">Dodaj</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CREATOR MODE - GARAGE TAB -->
+                <div class="tab-content" id="tab-garage">
+                    <h1 class="panel-title" data-translate="creator_garage_title">Postavke Garaže i Vozila</h1>
+                    <p class="panel-desc" data-translate="creator_garage_desc">Definirajte točku preuzimanja/spremanja i
+                        konfigurirajte vozni park frakcije.</p>
+
+                    <div class="grid-2">
+                        <div class="card card-action" id="set-garage-pos1">
+                            <div class="card-icon"><i class="fa-solid fa-map-pin"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="garage_pickup_coords">Pozicija Preuzimanja</h3>
+                                <span class="coords-display" id="garage-pos1-coords" data-translate="not_set">Nije
+                                    postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="btn_set">Postavi</button>
+                        </div>
+                        <div class="card card-action" id="set-garage-pos2">
+                            <div class="card-icon"><i class="fa-solid fa-car-side"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="garage_spawn_coords">Točka Spawna i Heading</h3>
+                                <span class="coords-display" id="garage-pos2-coords" data-translate="not_set">Nije
+                                    postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="btn_set">Postavi</button>
+                        </div>
+                    </div>
+
+                    <div class="list-section mt-20">
+                        <h3 data-translate="current_vehs">Dostupna Vozila u Garaži</h3>
+                        <div class="list-items" id="creator-vehicles-list">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+
+                    <div class="form-add-section card mt-15">
+                        <h3 data-translate="add_new_veh"><i class="fa-solid fa-plus-circle"></i> Dodaj Novo Vozilo</h3>
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label data-translate="veh_label_label">Oznaka (Ime u izborniku)</label>
+                                <input type="text" id="veh-label" placeholder="Presretač">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="veh_model_label">Spawn Naziv Modela</label>
+                                <input type="text" id="veh-model" placeholder="police3">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="veh_color_label">Boja Vozila</label>
+                                <input type="color" id="veh-color" value="#ffffff" class="color-picker-input">
+                            </div>
+                        </div>
+                        <div class="grid-3 mt-10">
+                            <div class="form-group">
+                                <label data-translate="veh_plate_label">Tablica (Targa)</label>
+                                <input type="text" id="veh-plate" placeholder="LSPD 01">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="gradomin">Minimalni Rang</label>
+                                <input type="number" id="veh-grade" value="0">
+                            </div>
+                            <div class="form-group flex-column justify-center" style="margin-bottom:0px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="veh-fullkit">
+                                    <span class="checkmark"></span>
+                                    <span data-translate="full_tuning">Full Nadogradnje</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-15 text-right">
+                            <button class="btn btn-primary btn-sm" id="add-vehicle-btn" data-translate="btn_add">Dodaj
+                                Vozilo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CREATOR MODE - GRADES TAB -->
+                <div class="tab-content" id="tab-grades">
+                    <h1 class="panel-title" data-translate="creator_grades_title">Upravljanje Rangovima i Plaćama</h1>
+                    <p class="panel-desc" data-translate="creator_grades_desc">Drag & Drop (odvucite) rangove za
+                        preslagivanje njihovog reda/prioriteta (poput Discord rola). Indeksi rangova će se automatski
+                        preračunati od 0 (najniži) do vrha.</p>
+
+                    <div class="list-section">
+                        <h3 data-translate="grades_structure">Struktura Rangova (Odvucite za preslagivanje)</h3>
+                        <div class="list-items draggable-list" id="grades-list">
+                            <!-- Populated via JS. Draggable items here -->
+                        </div>
+                    </div>
+
+                    <div class="form-add-section card mt-15">
+                        <h3 data-translate="add_new_grade"><i class="fa-solid fa-plus-circle"></i> Dodaj Novi Rang</h3>
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label data-translate="grade_name_id">Naziv (ID - malim slovima, bez razmaka)</label>
+                                <input type="text" id="grade-name" placeholder="boss">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="grade_label_lbl">Oznaka (Naziv u igri)</label>
+                                <input type="text" id="grade-label" placeholder="Boss">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="salary">Plaća ($)</label>
+                                <input type="number" id="grade-salary" value="1000">
+                            </div>
+                        </div>
+                        <div class="mt-15 text-right">
+                            <button class="btn btn-primary btn-sm" id="add-grade-btn" data-translate="btn_add">Dodaj
+                                Rang</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CREATOR MODE - FINISH TAB -->
+                <div class="tab-content" id="tab-finish">
+                    <h1 class="panel-title" data-translate="creator_finish_title">Spremi ili Ukloni Frakciju</h1>
+                    <p class="panel-desc" data-translate="creator_finish_desc">Provjerite sve podatke prije spremanja.
+                        Promjene se izravno primjenjuju i ažuriraju bazu podataka.</p>
+
+                    <div class="card summary-card">
+                        <h3 data-translate="summary_data"><i class="fa-solid fa-chart-simple"></i> Sažetak Podataka</h3>
+                        <ul class="summary-list">
+                            <li><strong data-translate="summary_job_id">ID Posla:</strong> <span id="summary-job-name"
+                                    data-translate="not_entered">Nije uneseno</span></li>
+                            <li><strong data-translate="summary_job_label">Prikazano Ime:</strong> <span
+                                    id="summary-job-label" data-translate="not_entered">Nije uneseno</span></li>
+                            <li><strong data-translate="summary_total_invs">Ukupno Skladišta:</strong> <span
+                                    id="summary-total-invs">0</span></li>
+                            <li><strong data-translate="summary_total_vehs">Ukupno Vozila:</strong> <span
+                                    id="summary-total-vehs">0</span></li>
+                            <li><strong data-translate="summary_total_grades">Broj Rangova:</strong> <span
+                                    id="summary-total-grades">0</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="action-footer mt-30">
+                        <button class="btn btn-primary btn-lg" id="save-job-btn">
+                            <i class="fa-solid fa-floppy-disk"></i> <span data-translate="btn_save_job">Spremi i
+                                Aktiviraj Frakciju</span>
+                        </button>
+                        <button class="btn btn-danger btn-lg" id="delete-job-btn" style="display: none;">
+                            <i class="fa-solid fa-trash-can"></i> <span data-translate="btn_delete_job">Trajno Obriši
+                                Posao</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- GARAGE MODE (Retrieve Vehicles UI) -->
+                <div class="mode-container" id="garage-mode-container" style="display: none;">
+                    <h1 class="panel-title" id="garage-title" data-translate="garagetitle">Frakcijska Garaža</h1>
+                    <p class="panel-desc" id="garage-desc" data-translate="garage_desc">Odaberite vozilo koje želite
+                        preuzeti iz garaže.</p>
+                    <div class="vehicles-grid" id="garage-vehicles-grid">
+                        <!-- Populated via JS (Vehicle cards) -->
+                    </div>
+                </div>
+
+                <!-- WARDROBE MODE (Wear Outfits UI) -->
+                <div class="mode-container" id="wardrobe-mode-container" style="display: none;">
+                    <h1 class="panel-title" id="wardrobe-title" data-translate="wardrobe_title">Garderoba Posla</h1>
+                    <p class="panel-desc" id="wardrobe-desc" data-translate="wardrobe_desc">Pregledajte i obucite
+                        spremljenu uniformu ili kreirajte novu.</p>
+
+                    <div class="wardrobe-actions-top">
+                        <button class="btn btn-primary" id="wardrobe-open-ped">
+                            <i class="fa-solid fa-user-pen"></i> <span data-translate="open_outfit_menu">Prilagodi
+                                Izgled</span>
+                        </button>
+                        <button class="btn btn-secondary" id="wardrobe-save-current" style="display: none;">
+                            <i class="fa-solid fa-floppy-disk"></i> <span data-translate="save_current_outfit">Spremi
+                                Trenutnu Uniformu</span>
+                        </button>
+                    </div>
+
+                    <div class="outfits-grid mt-20" id="wardrobe-outfits-grid">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Unified Custom Overlay Modal Dialog System (Replaces ox_lib inputs & alerts) -->
+        <div class="modal-overlay" id="custom-modal" style="display: none;">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <h3 id="modal-title">Potvrda</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    <!-- Dynamic form or prompt contents -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="modal-btn-cancel" onclick="closeModal()"
+                        data-translate="btn_cancel">Odustani</button>
+                    <button class="btn btn-primary" id="modal-btn-confirm" data-translate="btn_confirm">Potvrdi</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script Entry -->
+    <script src="js/script.js"></script>
+</body>
+
+</html>

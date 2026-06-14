@@ -1,8 +1,12 @@
 -- ========================================
--- hPoslovi Server
+-- hPoslovi Server - V1.0 Release
+-- ESX Society + Illenium Appearance Only
 -- ========================================
 
+lib.locale(Config.Locale)
+
 local jobOutfits = {}
+
 
 -- Helper function for debug logging
 local function DebugLog(message)
@@ -14,8 +18,6 @@ end
 -- ========================================
 -- INITIALIZATION
 -- ========================================
-
-lib.versionCheck('balkanhugo/hPoslovi')
 
 CreateThread(function()
     Wait(1000)
@@ -71,7 +73,7 @@ RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, 
     if not xPlayer then return end
     
     if xPlayer.job.name ~= jobName then
-        xPlayer.showNotification('You are not part of this job!')
+        xPlayer.showNotification(locale('not_part_of_job'))
         return
     end
     
@@ -81,7 +83,7 @@ RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, 
     
     -- Check if player has sufficient grade (>= boss grade)
     if xPlayer.job.grade < bossGrade then
-        xPlayer.showNotification('You need to be at least grade ' .. bossGrade .. ' to save outfits!')
+        xPlayer.showNotification(locale('need_grade_save_outfit', bossGrade))
         return
     end
     
@@ -97,7 +99,7 @@ RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, 
     end
     jobOutfits[jobName][outfitName] = outfitData
     
-    xPlayer.showNotification('Outfit "' .. outfitName .. '" saved successfully!')
+    xPlayer.showNotification(locale('outfit_saved_success', outfitName))
     DebugLog('Outfit saved: ' .. outfitName .. ' for ' .. jobName)
 end)
 
@@ -119,7 +121,7 @@ RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName
     if not xPlayer then return end
     
     if xPlayer.job.name ~= jobName then
-        xPlayer.showNotification('You are not part of this job!')
+        xPlayer.showNotification(locale('not_part_of_job'))
         return
     end
     
@@ -129,7 +131,7 @@ RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName
     
     -- Check if player has sufficient grade (>= boss grade)
     if xPlayer.job.grade < bossGrade then
-        xPlayer.showNotification('You need to be at least grade ' .. bossGrade .. ' to delete outfits!')
+        xPlayer.showNotification(locale('need_grade_delete_outfit', bossGrade))
         return
     end
     
@@ -139,7 +141,7 @@ RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName
     -- Update memory
     if jobOutfits[jobName] and jobOutfits[jobName][outfitName] then
         jobOutfits[jobName][outfitName] = nil
-        xPlayer.showNotification('Outfit "' .. outfitName .. '" deleted successfully!')
+        xPlayer.showNotification(locale('outfit_deleted_success', outfitName))
         DebugLog('Outfit deleted: ' .. outfitName .. ' from ' .. jobName)
     end
 end)
@@ -237,7 +239,7 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
         end
     end
     
-    xPlayer.showNotification('Job ' .. (isModifying and 'updated' or 'created') .. ' successfully!')
+    xPlayer.showNotification(isModifying and locale('job_updated_success') or locale('job_created_success'))
     
     -- REFRESH MARKERS ON ALL CLIENTS
     TriggerClientEvent('hPoslovi:client:refreshJobs', -1)
@@ -268,7 +270,7 @@ RegisterNetEvent('hPoslovi:server:deleteJob', function(jobName)
     jobOutfits[jobName] = nil
     
     DebugLog('Job deleted: ' .. jobName)
-    xPlayer.showNotification('Job deleted successfully!')
+    xPlayer.showNotification(locale('job_deleted_success'))
     TriggerClientEvent('hPoslovi:client:refreshJobs', -1)
 end)
 
@@ -374,10 +376,10 @@ RegisterNetEvent('hPoslovi:server:addVehicle', function(jobName, vehicleData)
     
     if result then
         DebugLog('Vehicle added: ' .. vehicleData.label .. ' for ' .. jobName)
-        xPlayer.showNotification('Vehicle added successfully!')
+        xPlayer.showNotification(locale('vehaddedsuccessfully'))
         TriggerClientEvent('hPoslovi:client:refreshVehicles', -1, jobName)
     else
-        xPlayer.showNotification('Failed to add vehicle!')
+        xPlayer.showNotification(locale('failed_add_veh'))
     end
 end)
 
@@ -389,10 +391,10 @@ RegisterNetEvent('hPoslovi:server:deleteVehicle', function(vehicleId, jobName)
     
     if result then
         DebugLog('Vehicle deleted: ID ' .. vehicleId)
-        xPlayer.showNotification('Vehicle deleted successfully!')
+        xPlayer.showNotification(locale('veh_deleted_success'))
         TriggerClientEvent('hPoslovi:client:refreshVehicles', -1, jobName)
     else
-        xPlayer.showNotification('Failed to delete vehicle!')
+        xPlayer.showNotification(locale('failed_delete_veh'))
     end
 end)
 

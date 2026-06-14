@@ -27,7 +27,19 @@ local function CanAccessGroup(myGrade, requiredGrade)
     return myGrade >= (tonumber(requiredGrade) or 0)
 end
 
--- WARDROBE FUNCTION - REDESIGNED WITH ILLENIUM APPEARANCE
+-- HELPER: Get Locales Table for NUI Translation
+local function GetLocalesTable()
+    local fileContent = LoadResourceFile(GetCurrentResourceName(), 'locales/' .. Config.Locale .. '.json')
+    if fileContent then
+        local decoded = json.decode(fileContent)
+        if decoded then
+            return decoded
+        end
+    end
+    return {}
+end
+
+-- WARDROBE FUNCTION - REDESIGNED WITH ILLENIUM APPEARANCE & NUI
 YourWardRobeFunc = function(job)
     local PlayerData = ESX.GetPlayerData()
     
@@ -37,162 +49,20 @@ YourWardRobeFunc = function(job)
         
         -- Get outfits
         lib.callback('hPoslovi:server:getJobOutfits', false, function(outfits)
-            BuildWardrobeMenu(job, outfits, canManageOutfits)
+            SetNuiFocus(true, true)
+            SendNUIMessage({
+                action = 'open',
+                mode = 'wardrobe',
+                job = job,
+                canManage = canManageOutfits,
+                outfits = outfits,
+                locales = GetLocalesTable()
+            })
         end, job)
     end, job)
 end
 
-function BuildWardrobeMenu(job, outfits, canManageOutfits)
-    local menuOptions = {}
-    
-    -- Button 1: Open Ped Menu (illenium-appearance) - AVAILABLE TO EVERYONE
-    table.insert(menuOptions, {
-        label = 'Open Outfit Menu',
-        description = 'Create and customize your appearance',
-        icon = 'user-pen',
-        iconColor = '#3B82F6',
-    })
-    
-    -- Button 2: Save Current Outfit (only for sboss grade or higher)
-    if canManageOutfits then
-        table.insert(menuOptions, {
-            label = 'Save Current Outfit',
-            description = 'Save your current appearance as a job outfit',
-            icon = 'floppy-disk',
-            iconColor = '#10B981',
-        })
-    end
-        
-        -- Buttons 3+: Available Outfits - AVAILABLE TO EVERYONE
-        local outfitList = {}
-        for outfitName, outfitData in pairs(outfits) do
-            table.insert(outfitList, {name = outfitName, data = outfitData})
-        end
-        
-        -- Sort outfits alphabetically for consistent display
-        table.sort(outfitList, function(a, b) return a.name < b.name end)
-        
-        for _, outfit in ipairs(outfitList) do
-            table.insert(menuOptions, {
-                label = outfit.name,
-                description = 'Click to wear this outfit',
-                icon = 'shirt',
-                iconColor = Config.IconColor or '#6366F1',
-                args = {outfitName = outfit.name, outfitData = outfit.data}
-            })
-        end
-        
-        -- Add delete option at the end if user has permissions and outfits exist
-        if canManageOutfits and next(outfits) then
-            table.insert(menuOptions, {
-                label = 'Delete Outfit',
-                description = 'Remove a saved outfit',
-                icon = 'trash',
-                iconColor = '#EF4444',
-            })
-        end
-        
-        lib.registerMenu({
-            id = 'wardrobe_menu_' .. job,
-            title = 'Wardrobe - ' .. job,
-            position = Config.MenuPosition or 'top-right',
-            options = menuOptions
-        }, function(selected, scrollIndex, args)
-            local option = menuOptions[selected]
-            if not option then return end
-            
-            -- Button 1: Open Ped Menu
-            if option.label == 'Open Outfit Menu' then
-                lib.hideMenu(true)
-                TriggerEvent('illenium-appearance:client:openOutfitMenu')
-                
-            -- Button 2: Save Current Outfit
-            elseif option.label == 'Save Current Outfit' then
-                local input = lib.inputDialog('Save Outfit', {
-                    {type = 'input', label = 'Outfit Name', description = 'Enter a name for this outfit', required = true, min = 3, max = 50}
-                })
-                if input and input[1] then
-                    local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
-                    if appearance then
-                        TriggerServerEvent('hPoslovi:server:saveJobOutfit', job, input[1], appearance)
-                        lib.notify({
-                            title = 'Wardrobe',
-                            description = 'Outfit "' .. input[1] .. '" saved!',
-                            type = 'success'
-                        })
-                        Wait(500)
-                        YourWardRobeFunc(job)
-                    else
-                        lib.notify({
-                            title = 'Wardrobe',
-                            description = 'Failed to get appearance data',
-                            type = 'error'
-                        })
-                    end
-                end
-                
-            -- Delete Outfit option
-            elseif option.label == 'Delete Outfit' then
-                local deleteOptions = {}
-                for outfitName in pairs(outfits) do
-                    table.insert(deleteOptions, {
-                        label = outfitName,
-                        icon = 'trash',
-                        iconColor = '#EF4444',
-                    })
-                end
-                
-                -- Sort delete options alphabetically
-                table.sort(deleteOptions, function(a, b) return a.label < b.label end)
-                
-                lib.registerMenu({
-                    id = 'delete_outfit_menu',
-                    title = 'Delete Outfit',
-                    position = Config.MenuPosition or 'top-right',
-                    options = deleteOptions,
-                    onClose = function()
-                        YourWardRobeFunc(job)
-                    end
-                }, function(deleteSelected, scrollIndex2, args2)
-                    local outfitToDelete = deleteOptions[deleteSelected].label
-                    local confirm = lib.alertDialog({
-                        header = 'Delete Outfit',
-                        content = 'Are you sure you want to delete "' .. outfitToDelete .. '"?',
-                        centered = true,
-                        cancel = true
-                    })
-                    if confirm == 'confirm' then
-                        TriggerServerEvent('hPoslovi:server:deleteJobOutfit', job, outfitToDelete)
-                        lib.notify({
-                            title = 'Wardrobe',
-                            description = 'Outfit deleted',
-                            type = 'info'
-                        })
-                        Wait(500)
-                        YourWardRobeFunc(job)
-                    end
-                end)
-                lib.showMenu('delete_outfit_menu')
-                
-            -- Buttons 3+: Load saved outfit
-            elseif args and args.outfitData then
-                exports['illenium-appearance']:setPlayerAppearance(args.outfitData)
-                lib.notify({
-                    title = 'Wardrobe',
-                    description = 'Outfit "' .. args.outfitName .. '" applied',
-                    type = 'success'
-                })
-                lib.hideMenu(true)
-            end
-        end)
-        lib.showMenu('wardrobe_menu_' .. job)
-end
-
--- =======================================================
--- COMPLETELY REWRITTEN GARAGE SYSTEM
--- =======================================================
-
--- GARAGE FUNCTION (Player Usage) - DATABASE VERSION
+-- GARAGE FUNCTION (Player Usage) - NUI VERSION
 function ApriGarage(data, job)
     local jobData = nil
     for k,v in pairs(data) do
@@ -203,55 +73,37 @@ function ApriGarage(data, job)
     end
 
     if not jobData then 
-        Notify('Job data not found!')
+        Notify(locale('job_data_not_found'))
         return 
     end
 
     -- Ensure garage structure exists
     if not jobData.garage then
-        Notify('Garage not configured for this job!')
+        Notify(locale('garage_not_configured'))
         return
     end
 
     -- Load vehicles from database
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local elements = {}
+        local PlayerData = ESX.GetPlayerData()
+        local availableVehicles = {}
         
-        -- List Vehicles from database
         if vehicles and #vehicles > 0 then
             for idx, vehicle in ipairs(vehicles) do
-                local gradeText = vehicle.min_grade and ("Min Grade: "..vehicle.min_grade) or "No Grade Required"
-                table.insert(elements, {
-                    label = vehicle.label,
-                    description = vehicle.model .. " | " .. gradeText,
-                    icon = 'car',
-                    iconColor = Config.IconColor,
-                    args = {
-                        vehicleData = vehicle,
-                        garageData = jobData.garage
-                    }
-                })
+                if PlayerData.job.grade >= (tonumber(vehicle.min_grade) or 0) then
+                    table.insert(availableVehicles, vehicle)
+                end
             end
-        else
-            table.insert(elements, {
-                label = locale('vehiclenotavaible'),
-                icon = 'circle-xmark',
-                disabled = true
-            })
         end
 
-        lib.registerMenu({
-            id = 'garage_menu_'..job,
-            title = locale('garagetitle'),
-            position = Config.MenuPosition or 'top-right',
-            options = elements
-        }, function(selected, scrollIndex, args)
-            local option = elements[selected]
-            if option and option.args then
-                SpawnJobVehicle(option.args.vehicleData, option.args.garageData)
-            end
-        end)
-        lib.showMenu('garage_menu_'..job)
+        SetNuiFocus(true, true)
+        SendNUIMessage({
+            action = 'open',
+            mode = 'garage',
+            vehicles = availableVehicles,
+            job = job,
+            locales = GetLocalesTable()
+        })
     end, job)
 end
 
@@ -271,7 +123,7 @@ function SpawnJobVehicle(vehicleData, garageData)
 
     -- Validate spawn point
     if not garageData.pos2 then 
-        Notify('Garage Spawn Point Not Set!') 
+        Notify(locale('garage_spawn_not_set')) 
         return 
     end
 
@@ -289,12 +141,12 @@ function SpawnJobVehicle(vehicleData, garageData)
     local modelHash = type(model) == 'string' and joaat(model) or model
     
     if not IsModelInCdimage(modelHash) then 
-        Notify('Invalid Model: ' .. tostring(model)) 
+        Notify(locale('invalid_model_msg', tostring(model))) 
         return 
     end
 
     if not IsModelAVehicle(modelHash) then
-        Notify('Model is not a vehicle: ' .. tostring(model))
+        Notify(locale('model_not_vehicle', tostring(model)))
         return
     end
 
@@ -307,7 +159,7 @@ function SpawnJobVehicle(vehicleData, garageData)
     end
 
     if not HasModelLoaded(modelHash) then
-        Notify('Failed to load vehicle model')
+        Notify(locale('failed_load_veh'))
         return
     end
 
@@ -315,7 +167,7 @@ function SpawnJobVehicle(vehicleData, garageData)
     local vehicle = CreateVehicle(modelHash, spawnCoords.x, spawnCoords.y, spawnCoords.z, heading, true, false)
     
     if not DoesEntityExist(vehicle) then
-        Notify('Failed to create vehicle')
+        Notify(locale('failed_create_veh'))
         SetModelAsNoLongerNeeded(modelHash)
         return
     end
@@ -371,39 +223,36 @@ function SpawnJobVehicle(vehicleData, garageData)
     -- Put player in vehicle
     TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
     Notify(locale('vehspawned'))
-    lib.hideMenu(true)
 end
 
--- =======================================================
--- ADMIN / JOB CREATION MENUS
--- =======================================================
-
+-- ADMIN / JOB CREATION MENUS (NUI VERSION)
 function ApriMenu(label, job, modifica, selezionata)
-    -- Set global modification state
     isModifying = modifica
     
-    -- If modifying, load existing data from server
     if modifica then 
-        print('[hPoslovi] Loading job data from database: ' .. job)
+        DebugLog('Loading job data from database: ' .. job)
         lib.callback('hPoslovi:server:getAllJobs', false, function(data)
             for k,v in pairs(data) do 
                 if v.job == job then 
                     datafaz = v
                     old = k
-                    -- Ensure garage structure exists
                     if not datafaz.garage then
                         datafaz.garage = { veicoli = {} }
                     end
-                    print('[hPoslovi] Loaded job data for: ' .. job)
                     
-                    -- Now open the menu
-                    OpenJobEditMenu(label, job, modifica)
+                    SetNuiFocus(true, true)
+                    SendNUIMessage({
+                        action = 'open',
+                        mode = 'creator',
+                        isModifying = true,
+                        data = datafaz,
+                        locales = GetLocalesTable()
+                    })
                     break
                 end
             end
         end)
     else
-        -- Creating new job - initialize datafaz
         datafaz = {
             job = job,
             label = label,
@@ -413,379 +262,134 @@ function ApriMenu(label, job, modifica, selezionata)
             gradi = {}
         }
         
-        -- Open menu immediately for new jobs
-        OpenJobEditMenu(label, job, modifica)
-    end
-end
-
-function OpenJobEditMenu(label, job, modifica)
-
-    local opt = {
-        {label = locale('bossmenu'), description = locale('bossmenudesc'), icon = 'user-tie', iconColor = Config.IconColor},
-        {label = locale('inv'), description = locale('inv2'), icon = 'cart-flatbed', iconColor = Config.IconColor},
-        {label = locale('camerino'), description = locale('descamerino'), icon = 'shirt', iconColor = Config.IconColor},
-        {label = locale('garage'), description = locale('garage2'), icon = 'warehouse', iconColor = Config.IconColor},
-        {label = locale('gradi'), description = locale('gradi2'), icon = 'crown', iconColor = Config.IconColor},
-        {label = locale('conferma'), description = locale('conferma2'), icon = 'circle-check', iconColor = '#00FF00'},
-    }
-    
-    if modifica then
-        table.insert(opt, {
-            label = locale('deletejob'), 
-            description = locale('deletejob2'), 
-            icon = 'trash', 
-            iconColor = '#FF0000',
+        SetNuiFocus(true, true)
+        SendNUIMessage({
+            action = 'open',
+            mode = 'creator',
+            isModifying = false,
+            data = datafaz,
+            locales = GetLocalesTable()
         })
     end
-
-    lib.registerMenu({
-        id = 'menufaz_'..job,
-        title = locale('fazione').." "..label,
-        position = Config.MenuPosition or 'top-right',
-        options = opt
-    }, function(selected, scrollIndex, args)
-        if selected == 1 then
-            -- Boss Menu
-            local i = lib.inputDialog(locale('dialogboss1'), { locale('dialogboss2')})
-            if not i then return end
-            if not tonumber(i[1]) then Notify(locale('requirednumber')) return end
-            
-            datafaz.bossmenu.gradoboss = tonumber(i[1])
-            
-            if lib.alertDialog({header = locale('confirmpos'), content = locale('confirmpos2'), centered = true, cancel = true}) == 'confirm' then
-                datafaz.bossmenu.pos = GetEntityCoords(PlayerPedId())
-                Notify(locale('cofirmnotif'))
-            end
-            OpenJobEditMenu(label, job, modifica)  -- Reopen menu
-        elseif selected == 2 then
-            -- Inventory
-            MenuInv()
-        elseif selected == 3 then
-            -- Wardrobe
-            if lib.alertDialog({header = locale('confirmpos'), content = locale('confirmpos2'), centered = true, cancel = true}) == 'confirm' then
-                datafaz.camerino = GetEntityCoords(PlayerPedId())
-                Notify(locale('cofirmnotif'))
-            end
-            OpenJobEditMenu(label, job, modifica)  -- Reopen menu
-        elseif selected == 4 then
-            -- Garage
-            MenuGarageSettings()
-        elseif selected == 5 then
-            -- Grades
-            MenuGradi()
-        elseif selected == 6 then
-            -- Confirm
-            if #datafaz.gradi == 0 then 
-                Notify(locale('notgradesnot'))
-                datafaz.gradi = Config.IfNotGrades
-            end
-            
-            print('[hPoslovi] Sending job data to server: ' .. datafaz.job .. ' (isModifying: ' .. tostring(isModifying) .. ')')
-            TriggerServerEvent('hPoslovi:server:createOrUpdateJob', datafaz, isModifying)
-            datafaz = {}
-            isModifying = false
-            old = nil
-            lib.hideMenu(true)
-        elseif selected == 7 and modifica then
-            -- Delete Job
-            TriggerServerEvent('hPoslovi:server:deleteJob', datafaz.job)
-            datafaz = {}
-            isModifying = false
-            old = nil
-            lib.hideMenu(true)
-        end
-    end)
-    lib.showMenu('menufaz_'..job)
 end
 
--- INVENTORY SETTINGS
-function MenuInv()
-    local elements = {}
-    
-    -- Add existing
-    for i, inv in ipairs(datafaz.inv) do
-        table.insert(elements, {
-            label = inv.label,
-            description = "Slots: "..inv.slots.." | Grade: "..inv.grado,
-            icon = 'box',
-            args = {index = i}
-        })
+-- =======================================================
+-- NUI CALLBACKS
+-- =======================================================
+
+RegisterNUICallback('close', function(data, cb)
+    SetNuiFocus(false, false)
+    cb('ok')
+end)
+
+RegisterNUICallback('getCoords', function(data, cb)
+    local coords = GetEntityCoords(PlayerPedId())
+    local heading = GetEntityHeading(PlayerPedId())
+    cb({ x = coords.x, y = coords.y, z = coords.z, heading = heading })
+end)
+
+RegisterNUICallback('addVehicle', function(data, cb)
+    if data and data.job and data.vehicle then
+        TriggerServerEvent('hPoslovi:server:addVehicle', data.job, data.vehicle)
     end
+    cb('ok')
+end)
 
-    -- Add New Button
-    table.insert(elements, {
-        label = locale('agginv'),
-        icon = 'plus',
-    })
-
-    lib.registerMenu({
-        id = 'menu_inv',
-        title = locale('invtitle'),
-        position = Config.MenuPosition or 'top-right',
-        options = elements,
-        onClose = function()
-            OpenJobEditMenu(datafaz.label, datafaz.job, isModifying)
-        end
-    }, function(selected, scrollIndex, args)
-        local option = elements[selected]
-        if option.args and option.args.index then
-            -- Delete inventory
-            if lib.alertDialog({header = locale('deleteinv'), content = locale('deleteinv2'), centered = true, cancel = true}) == 'confirm' then
-                table.remove(datafaz.inv, option.args.index)
-                Notify(locale('confirmremove'))
-                MenuInv()
-            end
-        elseif option.label == locale('agginv') then
-            -- Add new inventory
-            local input = lib.inputDialog(locale('impostazionidep'), {
-                {type = 'input', label = locale('nomedep'), required = true}, 
-                {type = 'number', label = locale('pesodep'), required = true}, 
-                {type = 'number', label = locale('slots'), required = true}, 
-                {type = 'number', label = locale('gradomin'), required = true}
-            })
-            
-            if input then
-                table.insert(datafaz.inv, {
-                    pos = GetEntityCoords(PlayerPedId()),
-                    nomedeposito = input[1],
-                    peso = input[2] * 1000,
-                    slots = input[3],
-                    grado = input[4],
-                    label = input[1], 
-                })
-                MenuInv()
-            end
-        end
-    end)
-    lib.showMenu('menu_inv')
-end
-
--- GARAGE SETTINGS MENU - IMPROVED
-function MenuGarageSettings()
-    lib.registerMenu({
-        id = 'menu_garage_settings',
-        title = locale('garagemenu'),
-        position = Config.MenuPosition or 'top-right',
-        options = {
-            {
-                label = locale('garagemenuritir'), 
-                icon = 'map-pin', 
-            },
-            {
-                label = locale('garagemenuspawn'), 
-                icon = 'car-side', 
-            },
-            {
-                label = locale('garagemenulist'), 
-                icon = 'list', 
-                description = 'Manage Vehicles',
-            },
-        },
-        onClose = function()
-            OpenJobEditMenu(datafaz.label, datafaz.job, isModifying)
-        end
-    }, function(selected, scrollIndex, args)
-        if selected == 1 then
-            -- Set pickup location
-            if lib.alertDialog({header = locale('confirmpos'), content = locale('confirmpos2'), centered = true, cancel = true}) == 'confirm' then
-                if not datafaz.garage then datafaz.garage = {} end
-                datafaz.garage.pos1 = GetEntityCoords(PlayerPedId())
-                Notify(locale('cofirmnotif'))
-            end
-            MenuGarageSettings()
-        elseif selected == 2 then
-            -- Set spawn location
-            if lib.alertDialog({header = locale('confirmpos'), content = locale('confirmpos2'), centered = true, cancel = true}) == 'confirm' then
-                if not datafaz.garage then datafaz.garage = {} end
-                datafaz.garage.pos2 = GetEntityCoords(PlayerPedId())
-                datafaz.garage.heading = GetEntityHeading(PlayerPedId())
-                Notify(locale('cofirmnotif'))
-            end
-            MenuGarageSettings()
-        elseif selected == 3 then
-            -- Vehicle list
-            MenuAddAuto()
-        end
-    end)
-    lib.showMenu('menu_garage_settings')
-end
-
--- VEHICLE LIST (EDIT MODE) - DATABASE VERSION
-function MenuAddAuto()
-    -- Load vehicles from database
-    lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local elements = {}
-
-        -- Existing Vehicles from database
-        if vehicles and #vehicles > 0 then
-            for i, veh in ipairs(vehicles) do
-                table.insert(elements, {
-                    label = veh.label,
-                    description = veh.model .. " | Grade: " .. (veh.min_grade or 0),
-                    icon = 'car',
-                    args = {id = veh.id, index = i}
-                })
-            end
-        end
-
-        -- Add New Vehicle
-        table.insert(elements, {
-            label = locale('addvehicle'),
-            description = locale('addvehdesc'),
-            icon = 'plus',
-        })
-
-        lib.registerMenu({
-            id = 'menu_veh_list',
-            title = 'Garage Vehicles',
-            position = Config.MenuPosition or 'top-right',
-            options = elements,
-            onClose = function()
-                MenuGarageSettings()
-            end
-        }, function(selected, scrollIndex, args)
-            local option = elements[selected]
-            
-            if option.args and option.args.id then
-                -- Delete vehicle
-                if lib.alertDialog({header = locale('deleteveh'), content = locale('deleteveh2'), centered = true, cancel = true}) == 'confirm' then
-                    TriggerServerEvent('hPoslovi:server:deleteVehicle', option.args.id, datafaz.job)
-                    Wait(300)
-                    MenuAddAuto() -- Refresh menu
-                end
-            elseif option.label == locale('addvehicle') then
-                -- Add new vehicle
-                local input = lib.inputDialog('VEHICLE SETTINGS', {
-                    {type = 'input', label = locale('label'), required = true},
-                    {type = 'input', label = locale('modelmaiusc'), required = true},
-                    {type = 'color', label = locale('color'), default = "#FFFFFF"},
-                    {type = 'checkbox', label = locale('fullkit')},
-                    {type = 'input', label = locale('plate')},
-                    {type = 'number', label = locale('gradomin'), default = 0}
-                })
-                
-                if input then
-                    -- Validate model name
-                    local modelName = string.upper(input[2])
-                    
-                    -- Color Conversion
-                    local rgbColor = HexToRGB(input[3])
-
-                    local newVehicle = {
-                        label = input[1],
-                        model = modelName,
-                        fullkit = input[4],
-                        plate = input[5],
-                        min_grade = input[6],
-                        color_r = rgbColor.r,
-                        color_g = rgbColor.g,
-                        color_b = rgbColor.b
-                    }
-                    
-                    TriggerServerEvent('hPoslovi:server:addVehicle', datafaz.job, newVehicle)
-                    Wait(300)
-                    MenuAddAuto() -- Refresh menu
-                end
-            end
-        end)
-        lib.showMenu('menu_veh_list')
-    end, datafaz.job)
-end
-
--- GRADES MENU
-function MenuGradi()
-    local elements = {}
-    
-    for i, grade in ipairs(datafaz.gradi) do
-        table.insert(elements, {
-            label = grade.label,
-            description = "Salary: $"..grade.salary,
-            icon = 'user',
-            args = {index = i}
-        })
+RegisterNUICallback('deleteVehicle', function(data, cb)
+    if data and data.id and data.job then
+        TriggerServerEvent('hPoslovi:server:deleteVehicle', data.id, data.job)
     end
+    cb('ok')
+end)
 
-    table.insert(elements, {
-        label = locale('addgrade'),
-        icon = 'plus',
-    })
+RegisterNUICallback('getJobVehicles', function(data, cb)
+    if data and data.job then
+        lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
+            cb(vehicles or {})
+        end, data.job)
+    else
+        cb({})
+    end
+end)
 
-    lib.registerMenu({
-        id = 'menu_gradi',
-        title = 'Grades Management',
-        position = Config.MenuPosition or 'top-right',
-        options = elements,
-        onClose = function()
-            OpenJobEditMenu(datafaz.label, datafaz.job, isModifying)
+RegisterNUICallback('saveJob', function(data, cb)
+    if data and data.data then
+        -- Set defaults if no grades provided
+        if #data.data.gradi == 0 then
+            data.data.gradi = Config.IfNotGrades
         end
-    }, function(selected, scrollIndex, args)
-        local option = elements[selected]
-        
-        if option.args and option.args.index then
-            -- Delete grade
-            if lib.alertDialog({header = locale('deletegrade'), content = locale('gradeconfirm'), centered = true, cancel = true}) == 'confirm' then
-                table.remove(datafaz.gradi, option.args.index)
-                Notify(locale('confirmremove'))
-                MenuGradi()
-            end
-        elseif option.label == locale('addgrade') then
-            -- Add new grade
-            local i = lib.inputDialog(locale('putname'), {
-                {type = 'input', label = locale('namegrade'), required = true}, 
-                {type = 'input', label = locale('labelgrade'), required = true}, 
-                {type = 'number', label = locale('salary'), required = true}
-            })
-            if i then
-                table.insert(datafaz.gradi, {
-                    grade = #datafaz.gradi, 
-                    name = string.lower(i[1]), 
-                    label = i[2], 
-                    salary = tonumber(i[3]), 
-                })
-                MenuGradi()
-            end
+        TriggerServerEvent('hPoslovi:server:createOrUpdateJob', data.data, data.isModifying)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('deleteJob', function(data, cb)
+    if data and data.job then
+        TriggerServerEvent('hPoslovi:server:deleteJob', data.job)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('editSelectedJob', function(data, cb)
+    if data and data.job then
+        ApriMenu("", data.job, true, nil)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('spawnVehicle', function(data, cb)
+    if data and data.vehicle and data.garage then
+        SpawnJobVehicle(data.vehicle, data.garage)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('wardrobeAction', function(data, cb)
+    if not data then cb('ok') return end
+
+    if data.action == 'openPedMenu' then
+        TriggerEvent('illenium-appearance:client:openOutfitMenu')
+    elseif data.action == 'saveOutfit' then
+        local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
+        if appearance then
+            TriggerServerEvent('hPoslovi:server:saveJobOutfit', data.job, data.outfitName, appearance)
+        else
+            Notify(locale('failed_appearance'))
         end
-    end)
-    lib.showMenu('menu_gradi')
-end
+    elseif data.action == 'wearOutfit' then
+        if data.outfitData then
+            exports['illenium-appearance']:setPlayerAppearance(data.outfitData)
+            Notify(locale('outfit_applied', data.outfitName))
+        end
+    elseif data.action == 'deleteOutfit' then
+        TriggerServerEvent('hPoslovi:server:deleteJobOutfit', data.job, data.outfitName)
+    end
+    cb('ok')
+end)
 
 -- EVENTS
 RegisterNetEvent('hPoslovi:client:openEditMenu', function()
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
         if not data or #data == 0 then
-            Notify('No jobs found in database!')
+            Notify(locale('no_jobs_found'))
             return
         end
         
-        local elements = {}
-        for k,v in pairs(data) do 
-            table.insert(elements, {
-                label = v.label, 
-                description = v.job,
-                args = {job = v.job, index = k}
-            })
-        end
-        
-        lib.registerMenu({
-            id = 'list_jobs',
-            title = locale('titleeditjob'),
-            position = Config.MenuPosition or 'top-right',
-            options = elements
-        }, function(selected, scrollIndex, args)
-            local option = elements[selected]
-            if option.args then
-                ApriMenu(option.label, option.args.job, true, option.args.index)
-            end
-        end)
-        lib.showMenu('list_jobs')
+        SetNuiFocus(true, true)
+        SendNUIMessage({
+            action = 'openJobList',
+            jobs = data,
+            locales = GetLocalesTable()
+        })
     end)
 end)
 
 RegisterNetEvent('hPoslovi:client:openCreateMenu', function()
-    local input = lib.inputDialog(locale('nomefaz'), {locale('nomefaz2'), locale('nomefaz3')})
-    if input then
-        ApriMenu(input[1], input[2], false, false)
-    end
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        action = 'openCreatePrompt',
+        locales = GetLocalesTable()
+    })
 end)
 
 RegisterNetEvent('hPoslovi:client:refreshJobs', function()
@@ -921,7 +525,8 @@ function CreaMark(data)
                     ApriGarage(data, v.job)
                 end,
                 onExit = function()
-                    lib.hideMenu(true)
+                    SetNuiFocus(false, false)
+                    SendNUIMessage({ action = 'close' })
                 end
             })
             
@@ -949,7 +554,8 @@ function CreaMark(data)
                         end
                     end,
                     onExit = function()
-                        lib.hideMenu(true)
+                        SetNuiFocus(false, false)
+                        SendNUIMessage({ action = 'close' })
                     end
                 })
             end

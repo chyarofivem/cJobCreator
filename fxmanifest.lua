@@ -1,11 +1,10 @@
 fx_version 'cerulean'
 game 'gta5'
-description 'original script by nxs-dev'
-author 'vibe coded by Chiaroscuric'
-version '1.0.1'
+description 'job maker using ox_lib'
+author 'chyaro group'
+version '1.0.0'
 
 client_scripts {
-    '@ox_lib/init.lua',
     'client/marker.lua',
     'client/main.lua'
 }
@@ -21,8 +20,11 @@ server_scripts {
     'server/*.lua'
 }
 
+ui_page 'html/index.html'
+
 files {
-    'locales/*.json'
-
+    'locales/*.json',
+    'html/index.html',
+    'html/css/style.css',
+    'html/js/script.js'
 }
-

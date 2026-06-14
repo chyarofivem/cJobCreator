@@ -12,6 +12,7 @@ local Keys = {
 
 local zoneRegistered = {}
 CurrentJob = nil
+CurrentJob2 = nil  -- Initialize to prevent nil value errors
 
 local CurrenPlayerData = {
     job = {
@@ -57,7 +58,7 @@ CreateThread(function ()
         Wait(10)
     end
     CurrentJob = ESX.GetPlayerData().job
-    CurrentJob2 = ESX.GetPlayerData().job2
+    CurrentJob2 = ESX.GetPlayerData().job2 or {name = "unemployed", grade = 0}  -- Add fallback
 end)
 
 RegisterNetEvent("esx:setJob")
@@ -79,7 +80,7 @@ local function HasJob(data)
             if 
             data.job[i] == CurrentJob.name and CurrentJob.grade >= data.grade
             or 
-            data.job[i] == CurrentJob2.name and CurrentJob2.grade >= data.grade
+            (CurrentJob2 and data.job[i] == CurrentJob2.name and CurrentJob2.grade >= data.grade)
             then
                 hasJob = true
             end
@@ -89,7 +90,7 @@ local function HasJob(data)
         if
         data.job == CurrentJob.name and CurrentJob.grade >= data.grade
         or
-        data.job == CurrentJob2.name and CurrentJob2.grade >= data.grade
+        (CurrentJob2 and data.job == CurrentJob2.name and CurrentJob2.grade >= data.grade)
         then
             hasJob = true
         end
@@ -202,7 +203,9 @@ local unregisterMarker = function (name)
         end
         zoneRegistered[name] = nil
     else
-        print("Marker with name", name, "not found.")
+        if Config.Debug then
+            print("Marker with name", name, "not found.")
+        end
     end
     
 end
