@@ -348,8 +348,7 @@ RegisterNUICallback('wardrobeAction', function(data, cb)
     if not data then cb('ok') return end
 
     if data.action == 'openPedMenu' then
-        TriggerEvent('illenium-appearance:client:openOutfitMenu')
-    elseif data.action == 'saveOutfit' then
+        TriggerEvent("illenium-appearance:client:openClothingShop", true)    elseif data.action == 'saveOutfit' then
         local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
         if appearance then
             TriggerServerEvent('hPoslovi:server:saveJobOutfit', data.job, data.outfitName, appearance)

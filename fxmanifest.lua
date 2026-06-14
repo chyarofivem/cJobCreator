@@ -1,6 +1,6 @@
 fx_version 'cerulean'
 game 'gta5'
-description ' Premium Glassmorphic Job & Faction Manager'
+description 'Premium Glassmorphic Job & Faction Manager'
 author 'chyaro group'
 version '2.0.0'
 
