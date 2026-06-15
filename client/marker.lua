@@ -144,7 +144,8 @@ local registerMarker = function (data)
     zoneRegistered[data.name] = point
 
     function point:onEnter()
-        if self.onEnter and type(self.onEnter) == "function" then
+        self.textuiOpened = false
+        if data.onEnter and type(data.onEnter) == "function" then
             if self.job then
                 if not HasJob(self) then
                     return
@@ -155,8 +156,9 @@ local registerMarker = function (data)
     end
      
     function point:onExit()
-        if self.onExit and type(self.onExit) == "function" then
-            lib.hideTextUI()
+        lib.hideTextUI()
+        self.textuiOpened = false
+        if data.onExit and type(data.onExit) == "function" then
             if self.job then
                 if not HasJob(self) then
                     return
@@ -169,12 +171,26 @@ local registerMarker = function (data)
     function point:nearby()
         if self.job then
             if not HasJob(self) then
+                if self.textuiOpened then
+                    lib.hideTextUI()
+                    self.textuiOpened = false
+                end
                 return
             end
         end
 
-        if self.msg ~= "" and self.currentDistance <= self.interactDistance then
-            FunzioneTextUI(self.msg)
+        if self.msg ~= "" then
+            if self.currentDistance <= self.interactDistance then
+                if not self.textuiOpened then
+                    FunzioneTextUI(self.msg)
+                    self.textuiOpened = true
+                end
+            else
+                if self.textuiOpened then
+                    lib.hideTextUI()
+                    self.textuiOpened = false
+                end
+            end
         end
 
         if self.type ~= -1 then
