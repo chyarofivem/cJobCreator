@@ -11,7 +11,7 @@ Config.Locale = 'en' -- Available: 'en', 'hr'
 -- ===========================================
 Config.MarkerType = 21 -- Set to -1 for custom markers
 Config.MarkerDrawDistance = 3
-Config.InteractDistance = 2
+Config.InteractDistance = 3
 Config.MarkerSize = vector3(0.8, 0.8, 0.8)
 Config.MarkerColor = { r = 255, g = 255, b = 255 }
 
@@ -81,4 +81,3 @@ end
 Notify = function(msg)
     ESX.ShowNotification(msg)
 end
-

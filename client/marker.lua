@@ -173,7 +173,7 @@ local registerMarker = function (data)
             end
         end
 
-        if self.msg ~= "" then
+        if self.msg ~= "" and self.currentDistance <= self.interactDistance then
             FunzioneTextUI(self.msg)
         end
 
