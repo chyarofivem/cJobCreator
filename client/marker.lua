@@ -115,7 +115,7 @@ local registerMarker = function (data)
     local point = lib.points.new({
 
         coords = data.pos or GetEntityCoords(cache.ped),
-        distance = data.drawDistance or 5,
+        distance = data.interactDistance or 2,
 
         show3D = data.show3D or false,
         msg = data.msg or "",
@@ -193,16 +193,18 @@ local registerMarker = function (data)
             end
         end
 
-        if self.type ~= -1 then
-            DrawMarker(self.type, self.coords, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, self.color.r, self.color.g, self.color.b, 100, self.shouldBob or false, true, 2, self.shouldRotate or false, nil, nil, false)
-        elseif self.texture and self.textureDict then
-            -- texture/textureDict must be truthy strings, not false/nil
-            if not HasStreamedTextureDictLoaded(self.textureDict) then
-                RequestStreamedTextureDict(self.textureDict, true)
-                -- Don't block with Wait() here — just skip drawing until loaded next frame
-            else
-                DrawMarker(9, self.coords, 0.0, 0.0, 0.0, 90.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, 255, 255, 255, 100, false, true, 2, true, self.textureDict, self.texture, false)
-            end       
+        if self.currentDistance <= self.interactDistance then
+            if self.type ~= -1 then
+                DrawMarker(self.type, self.coords, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, self.color.r, self.color.g, self.color.b, 100, self.shouldBob or false, true, 2, self.shouldRotate or false, nil, nil, false)
+            elseif self.texture and self.textureDict then
+                -- texture/textureDict must be truthy strings, not false/nil
+                if not HasStreamedTextureDictLoaded(self.textureDict) then
+                    RequestStreamedTextureDict(self.textureDict, true)
+                    -- Don't block with Wait() here — just skip drawing until loaded next frame
+                else
+                    DrawMarker(9, self.coords, 0.0, 0.0, 0.0, 90.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, 255, 255, 255, 100, false, true, 2, true, self.textureDict, self.texture, false)
+                end       
+            end
         end
         if self.currentDistance <= self.interactDistance and IsControlJustReleased(0, 38) then
             if self.action then
