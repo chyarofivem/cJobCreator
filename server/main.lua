@@ -1,9 +1,11 @@
+
 -- ========================================
 -- hPoslovi Server - V1.0 Release
 -- ESX Society + Illenium Appearance Only
 -- ========================================
 
 lib.locale(Config.Locale)
+lib.versionCheck('chyarofivem/cJobCreator')
 
 local jobOutfits = {}
 
@@ -222,22 +224,22 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
     if jobData.inv then
         for idx, inv in ipairs(jobData.inv) do
             if inv.label and inv.slots and inv.peso then
-                MySQL.insert.await('INSERT INTO hposlovi_inventories (job_name, inventory_id, label, slots, max_weight, min_grade) VALUES (?, ?, ?, ?, ?, ?)', {
-                    jobData.job, tostring(idx), inv.label, tonumber(inv.slots), tonumber(inv.peso), tonumber(inv.grado) or 0
-                })
+                -- Save x/y/z position directly on the inventory row
+                local invX = inv.pos and inv.pos.x or nil
+                local invY = inv.pos and inv.pos.y or nil
+                local invZ = inv.pos and inv.pos.z or nil
                 
-                if inv.pos then
-                    local extra = json.encode({inventory_id = tostring(idx)})
-                    MySQL.insert.await('INSERT INTO hposlovi_positions (job_name, position_type, position_id, x, y, z, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?)', {
-                        jobData.job, 'inventory', tostring(idx), inv.pos.x, inv.pos.y, inv.pos.z, extra
-                    })
-                end
+                MySQL.insert.await('INSERT INTO hposlovi_inventories (job_name, inventory_id, label, slots, max_weight, min_grade, x, y, z) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', {
+                    jobData.job, tostring(idx), inv.label, tonumber(inv.slots), tonumber(inv.peso), tonumber(inv.grado) or 0,
+                    invX, invY, invZ
+                })
                 
                 exports.ox_inventory:RegisterStash(jobData.job .. tostring(idx), inv.label, tonumber(inv.slots), tonumber(inv.peso), false)
                 DebugLog('Registered inventory: ' .. jobData.job .. tostring(idx))
             end
         end
     end
+
     
     xPlayer.showNotification(isModifying and locale('job_updated_success') or locale('job_created_success'))
     
@@ -283,11 +285,12 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
     local jobsData = {}
     
     for _, job in ipairs(jobs) do
+        -- Initialize with explicit null fields so json.encode produces {} objects, not [] arrays
         local jobData = {
             job = job.job_name,
             label = job.job_label,
-            bossmenu = {},
-            garage = {},
+            bossmenu = { pos = false, gradoboss = 4 },  -- false encodes as null in JSON but keeps it an object
+            garage   = { pos1 = false, pos2 = false, heading = 0.0 },
             inv = {},
             gradi = {}
         }
@@ -299,7 +302,7 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
                 jobData.bossmenu.pos = {x = pos.x, y = pos.y, z = pos.z}
                 if pos.extra_data then
                     local extra = json.decode(pos.extra_data)
-                    jobData.bossmenu.gradoboss = extra.boss_grade
+                    jobData.bossmenu.gradoboss = extra.boss_grade or 4
                 end
             elseif pos.position_type == 'wardrobe' then
                 jobData.camerino = {x = pos.x, y = pos.y, z = pos.z}
@@ -307,7 +310,7 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
                 jobData.garage.pos1 = {x = pos.x, y = pos.y, z = pos.z}
             elseif pos.position_type == 'garage_spawn' then
                 jobData.garage.pos2 = {x = pos.x, y = pos.y, z = pos.z}
-                jobData.garage.heading = pos.heading
+                jobData.garage.heading = pos.heading or 0.0
             elseif pos.position_type == 'inventory' and pos.extra_data then
                 local extra = json.decode(pos.extra_data)
                 local invIdx = tonumber(pos.position_id) or #jobData.inv + 1
@@ -318,7 +321,7 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
             end
         end
         
-        -- Get inventories
+        -- Get inventories (position stored directly as x/y/z on the inventory row)
         local inventories = MySQL.query.await('SELECT * FROM hposlovi_inventories WHERE job_name = ?', {job.job_name})
         for _, inv in ipairs(inventories) do
             local invIdx = tonumber(inv.inventory_id) or #jobData.inv + 1
@@ -330,7 +333,12 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
             jobData.inv[invIdx].slots = inv.slots
             jobData.inv[invIdx].peso = inv.max_weight
             jobData.inv[invIdx].grado = inv.min_grade
+            -- Read position directly from inventory row
+            if inv.x and inv.y and inv.z then
+                jobData.inv[invIdx].pos = {x = inv.x, y = inv.y, z = inv.z}
+            end
         end
+
         
         -- Get grades from ESX
         local grades = MySQL.query.await('SELECT * FROM job_grades WHERE job_name = ? ORDER BY grade ASC', {job.job_name})

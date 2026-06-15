@@ -509,12 +509,36 @@ function setupCreatorMode(existingJobData) {
     $('#sidebar-sub-title').text(locale('sidebar_creator_desc', 'Upravljanje postavkama'));
 
     if (isModifying && existingJobData) {
+        // Normalize bossmenu: handle empty array (Lua empty table encodes as []) or missing fields
+        let rawBossMenu = existingJobData.bossmenu;
+        let normalBossMenu;
+        if (rawBossMenu && !Array.isArray(rawBossMenu) && rawBossMenu.pos && typeof rawBossMenu.pos === 'object') {
+            // Valid bossmenu with a real position
+            normalBossMenu = { gradoboss: rawBossMenu.gradoboss || 4, pos: rawBossMenu.pos };
+        } else {
+            // No valid position: keep gradoboss if available, drop pos
+            normalBossMenu = { gradoboss: (rawBossMenu && !Array.isArray(rawBossMenu) && rawBossMenu.gradoboss) || 4 };
+        }
+
+        // Normalize garage: same issue
+        let rawGarage = existingJobData.garage;
+        let normalGarage;
+        if (rawGarage && !Array.isArray(rawGarage)) {
+            normalGarage = {
+                pos1:    (rawGarage.pos1 && typeof rawGarage.pos1 === 'object') ? rawGarage.pos1 : null,
+                pos2:    (rawGarage.pos2 && typeof rawGarage.pos2 === 'object') ? rawGarage.pos2 : null,
+                heading: rawGarage.heading || 0.0
+            };
+        } else {
+            normalGarage = { pos1: null, pos2: null, heading: 0.0 };
+        }
+
         datafaz = {
             job: existingJobData.job || '',
             label: existingJobData.label || '',
-            bossmenu: existingJobData.bossmenu || { gradoboss: 4 },
+            bossmenu: normalBossMenu,
             camerino: existingJobData.camerino || null,
-            garage: existingJobData.garage || { pos1: null, pos2: null, heading: 0.0 },
+            garage: normalGarage,
             inv: existingJobData.inv || [],
             gradi: existingJobData.gradi || []
         };

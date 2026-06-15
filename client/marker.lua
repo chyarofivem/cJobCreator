@@ -73,6 +73,9 @@ end)
 
 -- FIXED: Changed grade check from == to >=
 local function HasJob(data)
+    -- Guard against CurrentJob not yet loaded
+    if not CurrentJob or not CurrentJob.name then return false end
+    
     local hasJob = false
     if type(data.job) == "table" then
         for i = 1, #data.job, 1 do
@@ -80,7 +83,7 @@ local function HasJob(data)
             if 
             data.job[i] == CurrentJob.name and CurrentJob.grade >= data.grade
             or 
-            (CurrentJob2 and data.job[i] == CurrentJob2.name and CurrentJob2.grade >= data.grade)
+            (CurrentJob2 and CurrentJob2.name and data.job[i] == CurrentJob2.name and CurrentJob2.grade >= data.grade)
             then
                 hasJob = true
             end
@@ -90,13 +93,14 @@ local function HasJob(data)
         if
         data.job == CurrentJob.name and CurrentJob.grade >= data.grade
         or
-        (CurrentJob2 and data.job == CurrentJob2.name and CurrentJob2.grade >= data.grade)
+        (CurrentJob2 and CurrentJob2.name and data.job == CurrentJob2.name and CurrentJob2.grade >= data.grade)
         then
             hasJob = true
         end
     end
     return hasJob
 end
+
 
 
 
@@ -175,12 +179,11 @@ local registerMarker = function (data)
 
         if self.type ~= -1 then
             DrawMarker(self.type, self.coords, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, self.color.r, self.color.g, self.color.b, 100, self.shouldBob or false, true, 2, self.shouldRotate or false, nil, nil, false)
-        elseif self.texture ~= nil then 
+        elseif self.texture and self.textureDict then
+            -- texture/textureDict must be truthy strings, not false/nil
             if not HasStreamedTextureDictLoaded(self.textureDict) then
                 RequestStreamedTextureDict(self.textureDict, true)
-                while not HasStreamedTextureDictLoaded(self.textureDict) do
-                    Wait(1)
-                end
+                -- Don't block with Wait() here — just skip drawing until loaded next frame
             else
                 DrawMarker(9, self.coords, 0.0, 0.0, 0.0, 90.0, 0.0, 0.0, self.scale.x, self.scale.y, self.scale.z, 255, 255, 255, 100, false, true, 2, true, self.textureDict, self.texture, false)
             end       

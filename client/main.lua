@@ -225,7 +225,8 @@ function SpawnJobVehicle(vehicleData, garageData)
     Notify(locale('vehspawned'))
 end
 
--- ADMIN / JOB CREATION MENUS (NUI VERSION)
+
+
 function ApriMenu(label, job, modifica, selezionata)
     isModifying = modifica
     
@@ -393,12 +394,17 @@ end)
 
 RegisterNetEvent('hPoslovi:client:refreshJobs', function()
     DebugLog('Refreshing markers from database...')
+    -- Wait for esx:setJob to arrive before refreshing markers.
+    -- The server fires setJob and refreshJobs back-to-back, so setJob
+    -- may not have updated CurrentJob yet when we get here.
+    Wait(500)
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
         if data then
             CreaMark(data)
         end
     end)
 end)
+
 
 CreateThread(function()
     Wait(2000) -- Wait for server to load
@@ -412,6 +418,9 @@ CreateThread(function()
     end)
 end)
 
+-- Track registered inventory marker names per job so we can clean them up on refresh
+local registeredInvMarkers = {}
+
 function CreaMark(data)
     if not data then 
         DebugLog('ERROR: CreaMark called with nil data')
@@ -423,13 +432,33 @@ function CreaMark(data)
     for k,v in pairs(data) do
         DebugLog('Processing job: ' .. (v.job or 'unknown'))
         
-        -- Unregister Old
+        -- Unregister standard markers
         TriggerEvent('ox_gridsystem:unregisterMarker', 'bossmenu'..v.job)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'camerino'..v.job)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'garage1'..v.job)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'garage2'..v.job)
 
-        Wait(100) 
+        -- Unregister ALL previously registered inventory markers for this job
+        -- This ensures stale markers from previous configs are fully removed
+        if registeredInvMarkers[v.job] then
+            for _, invName in ipairs(registeredInvMarkers[v.job]) do
+                TriggerEvent('ox_gridsystem:unregisterMarker', invName)
+            end
+            registeredInvMarkers[v.job] = nil
+        end
+
+        -- Also unregister by current inv keys in case they changed
+        if v.inv then
+            for a, b in pairs(v.inv) do
+                if a and b.pos then
+                    TriggerEvent('ox_gridsystem:unregisterMarker', 'inv_'..v.job..'_'..a)
+                end
+            end
+        end
+
+        -- Wait longer to ensure ox_lib fully removes all old points before creating new ones.
+        -- Near walls the distance calculation can spike, so we need the old point fully gone.
+        Wait(250)
 
         -- Register New
         if v.bossmenu and v.bossmenu.pos then
@@ -455,18 +484,22 @@ function CreaMark(data)
         end
 
         if v.inv then
+            registeredInvMarkers[v.job] = registeredInvMarkers[v.job] or {}
             for a,b in pairs(v.inv) do
                 if a and b.pos then
-                    TriggerEvent('ox_gridsystem:unregisterMarker', 'inv'..a)
-                    Wait(100)
-                    DebugLog('Registering inventory marker ' .. a .. ' for ' .. v.job)
+                    -- Include job name in marker name to prevent conflicts between jobs
+                    local markerName = 'inv_'..v.job..'_'..a
+                    table.insert(registeredInvMarkers[v.job], markerName)
+                    DebugLog('Registering inventory marker ' .. tostring(a) .. ' for ' .. v.job)
                     TriggerEvent('ox_gridsystem:registerMarker', {
-                        name = 'inv'..a,
+                        name = markerName,
                         pos = vector3(b.pos.x, b.pos.y, b.pos.z),
                         size = Config.MarkerSize,
                         scale = Config.MarkerSize,
                         type = Config.MarkerType,
-                        drawDistance = Config.MarkerDrawDistance,
+                        -- Use a larger draw distance so the marker stays visible even when
+                        -- the distance calculation spikes due to nearby walls/geometry
+                        drawDistance = math.max(Config.MarkerDrawDistance, 8),
                         interactDistance = Config.InteractDistance,
                         color = Config.MarkerColor,
                         msg = locale('textuideposito'),
