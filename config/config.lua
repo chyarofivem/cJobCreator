@@ -24,6 +24,8 @@ Config.WardRobeMarker = false
 Config.BossMenuMarker = false
 Config.Vehicle1Marker = false
 Config.Vehicle2Marker = false
+Config.Helipad1Marker = false  -- Texture override for helipad retrieve marker
+Config.Helipad2Marker = false  -- Texture override for helipad deposit marker
 
 -- ===========================================
 -- JOB SYSTEM SETTINGS
@@ -40,6 +42,7 @@ Config.IfNotGrades = {
 -- Commands
 Config.CreateCommand = 'makejob'
 Config.EditCommand = 'editjob'
+Config.BaseCommand = 'baza'       -- Command to set a waypoint to the vehicle-get (garage_retrieve) marker for your current job
 
 -- Auto-set job to creator when making a job
 Config.AutoSetJob = true
@@ -81,3 +84,4 @@ end
 Notify = function(msg)
     ESX.ShowNotification(msg)
 end
+

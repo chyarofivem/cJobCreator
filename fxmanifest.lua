@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 description 'Premium Glassmorphic Job & Faction Manager'
 author 'chyaro group'
-version '2.0.3'
+version '2.1.0'
 
 client_scripts {
     'client/marker.lua',

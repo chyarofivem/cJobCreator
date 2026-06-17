@@ -47,6 +47,10 @@
                         <i class="fa-solid fa-warehouse"></i>
                         <span data-translate="garage">Garaža</span>
                     </button>
+                    <button class="tab-btn" data-tab="helipad">
+                        <i class="fa-solid fa-helicopter"></i>
+                        <span data-translate="helipad">Heliodrom</span>
+                    </button>
                     <button class="tab-btn" data-tab="grades">
                         <i class="fa-solid fa-crown"></i>
                         <span data-translate="gradi">Rangovi</span>
@@ -240,6 +244,77 @@
                     </div>
                 </div>
 
+                <!-- CREATOR MODE - HELIPAD TAB -->
+                <div class="tab-content" id="tab-helipad">
+                    <h1 class="panel-title" data-translate="creator_helipad_title">Postavke Heliodroma i Helikoptera</h1>
+                    <p class="panel-desc" data-translate="creator_helipad_desc">Definirajte točku preuzimanja i spawn poziciju te konfigurirajte helikoptere frakcije.</p>
+
+                    <div class="grid-2">
+                        <div class="card card-action" id="set-helipad-pos1">
+                            <div class="card-icon"><i class="fa-solid fa-map-pin"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="helipad_pickup_coords">Pozicija Preuzimanja</h3>
+                                <span class="coords-display" id="helipad-pos1-coords" data-translate="not_set">Nije postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="btn_set">Postavi</button>
+                        </div>
+                        <div class="card card-action" id="set-helipad-pos2">
+                            <div class="card-icon"><i class="fa-solid fa-helicopter"></i></div>
+                            <div class="card-text">
+                                <h3 data-translate="helipad_spawn_coords">Točka Spawna i Heading</h3>
+                                <span class="coords-display" id="helipad-pos2-coords" data-translate="not_set">Nije postavljeno</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" data-translate="btn_set">Postavi</button>
+                        </div>
+                    </div>
+
+                    <div class="list-section mt-20">
+                        <h3 data-translate="current_helis">Dostupni Helikopteri</h3>
+                        <div class="list-items" id="creator-helivehicles-list">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+
+                    <div class="form-add-section card mt-15">
+                        <h3 data-translate="add_new_heli"><i class="fa-solid fa-plus-circle"></i> Dodaj Novi Helikopter</h3>
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label data-translate="veh_label_label">Oznaka (Ime u izborniku)</label>
+                                <input type="text" id="heli-label" placeholder="Buzzard">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="veh_model_label">Spawn Naziv Modela</label>
+                                <input type="text" id="heli-model" placeholder="buzzard2">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="veh_color_label">Boja Helikoptera</label>
+                                <input type="color" id="heli-color" value="#ffffff" class="color-picker-input">
+                            </div>
+                        </div>
+                        <div class="grid-3 mt-10">
+                            <div class="form-group">
+                                <label data-translate="veh_plate_label">Tablica (Targa)</label>
+                                <input type="text" id="heli-plate" placeholder="LSPD H1">
+                            </div>
+                            <div class="form-group">
+                                <label data-translate="gradomin">Minimalni Rang</label>
+                                <input type="number" id="heli-grade" value="0">
+                            </div>
+                            <div class="form-group flex-column justify-center" style="margin-bottom:0px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="heli-fullkit">
+                                    <span class="checkmark"></span>
+                                    <span data-translate="full_tuning">Full Nadogradnje</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-15 text-right">
+                            <button class="btn btn-primary btn-sm" id="add-helivehicle-btn" data-translate="add_new_heli_btn">Dodaj Helikopter</button>
+                        </div>
+                    </div>
+                </div>
+
+
                 <!-- CREATOR MODE - GRADES TAB -->
                 <div class="tab-content" id="tab-grades">
                     <h1 class="panel-title" data-translate="creator_grades_title">Upravljanje Rangovima i Plaćama</h1>
@@ -317,6 +392,15 @@
                     <p class="panel-desc" id="garage-desc" data-translate="garage_desc">Odaberite vozilo koje želite
                         preuzeti iz garaže.</p>
                     <div class="vehicles-grid" id="garage-vehicles-grid">
+                        <!-- Populated via JS (Vehicle cards) -->
+                    </div>
+                </div>
+
+                <!-- HELIPAD MODE (Retrieve Helicopters UI) -->
+                <div class="mode-container" id="helipad-mode-container">
+                    <h1 class="panel-title" id="helipad-title" data-translate="helipadtitle">Frakcijski Heliodrom</h1>
+                    <p class="panel-desc" id="helipad-desc" data-translate="helipad_desc">Odaberite helikopter koji želite preuzeti s heliodroma.</p>
+                    <div class="vehicles-grid" id="helipad-vehicles-grid">
                         <!-- Populated via JS (Vehicle cards) -->
                     </div>
                 </div>

@@ -183,5 +183,20 @@
     "sidebar_creator_desc": "Upravljanje postavkama",
     "garage_desc": "Preuzmite neko od vozila registriranih za vašu frakciju.",
     "wardrobe_desc": "Obucite uniformu ili spremite trenutni izgled.",
-    "select_job_edit": "Odaberi Posao"
+    "select_job_edit": "Odaberi Posao",
+    "helipad": "Heliodrom",
+    "helipadtitle": "HELIODROM POSLA",
+    "helipad_desc": "Preuzmite helikopter registriran za vašu frakciju.",
+    "helipad_not_configured": "Heliodrom nije konfiguriran za ovaj posao!",
+    "helipad_spawn_not_set": "Pozicija za spawn helikoptera nije postavljena!",
+    "creator_helipad_title": "Postavke Heliodroma i Helikoptera",
+    "creator_helipad_desc": "Definirajte točku preuzimanja i spawn poziciju za helikoptere frakcije. Helikopteri dijele istu listu vozila kao i garaža.",
+    "helipad_pickup_coords": "Pozicija Preuzimanja",
+    "helipad_spawn_coords": "Točka Spawna i Heading",
+    "helipad_vehicles_shared": "Helikopteri koriste istu listu vozila kao garaža. Dodajte vozila u kartici Garaža.",
+    "texuihelipad1": "PREUZMI HELIKOPTER",
+    "texuihelipad2": "SPREMI HELIKOPTER",
+    "current_helis": "Dostupni Helikopteri",
+    "add_new_heli": "Dodaj Novi Helikopter",
+    "add_new_heli_btn": "Dodaj Helikopter"
 }

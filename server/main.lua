@@ -23,7 +23,117 @@ end
 
 CreateThread(function()
     Wait(1000)
-    
+
+    -- ============================================================
+    -- SCHEMA BOOTSTRAP: Create tables if they don't exist yet
+    -- ============================================================
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `hposlovi_jobs` (
+            `id`          int(11)      NOT NULL AUTO_INCREMENT,
+            `job_name`    varchar(50)  NOT NULL UNIQUE,
+            `job_label`   varchar(100) NOT NULL,
+            `created_at`  timestamp    DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `job_name` (`job_name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ]], {})
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `hposlovi_positions` (
+            `id`            int(11)      NOT NULL AUTO_INCREMENT,
+            `job_name`      varchar(50)  NOT NULL,
+            `position_type` varchar(50)  NOT NULL,
+            `position_id`   varchar(50)  DEFAULT NULL,
+            `x`             float        NOT NULL,
+            `y`             float        NOT NULL,
+            `z`             float        NOT NULL,
+            `heading`       float        DEFAULT NULL,
+            `extra_data`    text         DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            KEY `job_name` (`job_name`),
+            CONSTRAINT `fk_positions_job` FOREIGN KEY (`job_name`)
+                REFERENCES `hposlovi_jobs` (`job_name`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ]], {})
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `hposlovi_inventories` (
+            `id`           int(11)      NOT NULL AUTO_INCREMENT,
+            `job_name`     varchar(50)  NOT NULL,
+            `inventory_id` varchar(50)  NOT NULL,
+            `label`        varchar(100) NOT NULL,
+            `slots`        int(11)      NOT NULL DEFAULT 50,
+            `max_weight`   int(11)      NOT NULL DEFAULT 100000,
+            `min_grade`    int(11)      DEFAULT 0,
+            `x`            float        DEFAULT NULL,
+            `y`            float        DEFAULT NULL,
+            `z`            float        DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            KEY `job_name` (`job_name`),
+            CONSTRAINT `fk_inventories_job` FOREIGN KEY (`job_name`)
+                REFERENCES `hposlovi_jobs` (`job_name`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ]], {})
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `hposlovi_vehicles` (
+            `id`           int(11)      NOT NULL AUTO_INCREMENT,
+            `job_name`     varchar(50)  NOT NULL,
+            `label`        varchar(100) NOT NULL,
+            `model`        varchar(50)  NOT NULL,
+            `color_r`      int(11)      DEFAULT 255,
+            `color_g`      int(11)      DEFAULT 255,
+            `color_b`      int(11)      DEFAULT 255,
+            `plate`        varchar(20)  DEFAULT NULL,
+            `fullkit`      tinyint(1)   DEFAULT 0,
+            `min_grade`    int(11)      DEFAULT 0,
+            `vehicle_type` varchar(10)  NOT NULL DEFAULT 'car',
+            PRIMARY KEY (`id`),
+            KEY `job_name` (`job_name`),
+            CONSTRAINT `fk_vehicles_job` FOREIGN KEY (`job_name`)
+                REFERENCES `hposlovi_jobs` (`job_name`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ]], {})
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `hposlovi_outfits` (
+            `id`          int(11)      NOT NULL AUTO_INCREMENT,
+            `job_name`    varchar(50)  NOT NULL,
+            `outfit_name` varchar(100) NOT NULL,
+            `outfit_data` longtext     NOT NULL,
+            `created_at`  timestamp    DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_outfit` (`job_name`, `outfit_name`),
+            KEY `job_name` (`job_name`),
+            CONSTRAINT `fk_outfits_job` FOREIGN KEY (`job_name`)
+                REFERENCES `hposlovi_jobs` (`job_name`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ]], {})
+
+    -- ============================================================
+    -- SCHEMA MIGRATION: Ensure position_type is varchar(50).
+    -- If the column was created as an ENUM (or too-small varchar)
+    -- this widens it so helipad_retrieve / helipad_spawn fit.
+    -- ============================================================
+    MySQL.query.await([[
+        ALTER TABLE `hposlovi_positions`
+        MODIFY COLUMN `position_type` varchar(50) NOT NULL
+    ]], {})
+
+    -- Add vehicle_type to existing installations (silently ignored if already present)
+    pcall(function()
+        MySQL.query.await([[
+            ALTER TABLE `hposlovi_vehicles`
+            ADD COLUMN `vehicle_type` varchar(10) NOT NULL DEFAULT 'car'
+        ]], {})
+    end)
+
+    print('[hPoslovi] Schema bootstrap complete.')
+
+    -- ============================================================
+    -- RUNTIME INIT: Load inventories & outfits into memory
+    -- ============================================================
     DebugLog('Loading jobs from database...')
     local jobs = MySQL.query.await('SELECT * FROM hposlovi_jobs', {})
     
@@ -55,6 +165,7 @@ CreateThread(function()
     print('[hPoslovi] Database initialization complete!')
 end)
 
+
 -- ========================================
 -- OUTFIT SYSTEM
 -- ========================================
@@ -65,6 +176,30 @@ lib.callback.register('hPoslovi:server:getBossGrade', function(source, jobName)
     if bossMenu and bossMenu.extra_data then
         local extra = json.decode(bossMenu.extra_data)
         return extra.boss_grade or 0
+    end
+    return nil
+end)
+
+-- Get garage_retrieve position for a job (used by /baza client command)
+lib.callback.register('hPoslovi:server:getGarageRetrievePos', function(source, jobName)
+    local pos = MySQL.single.await(
+        'SELECT x, y, z FROM hposlovi_positions WHERE job_name = ? AND position_type = "garage_retrieve" LIMIT 1',
+        { jobName }
+    )
+    if pos and pos.x and pos.y then
+        return pos
+    end
+    return nil
+end)
+
+-- Get helipad_retrieve position for a job (used by /helipad client command)
+lib.callback.register('hPoslovi:server:getHelipadRetrievePos', function(source, jobName)
+    local pos = MySQL.single.await(
+        'SELECT x, y, z FROM hposlovi_positions WHERE job_name = ? AND position_type = "helipad_retrieve" LIMIT 1',
+        { jobName }
+    )
+    if pos and pos.x and pos.y then
+        return pos
     end
     return nil
 end)
@@ -218,6 +353,20 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
         end
     end
     
+    -- Helipad positions
+    if jobData.helipad then
+        if jobData.helipad.pos1 then
+            MySQL.insert.await('INSERT INTO hposlovi_positions (job_name, position_type, x, y, z) VALUES (?, ?, ?, ?, ?)', {
+                jobData.job, 'helipad_retrieve', jobData.helipad.pos1.x, jobData.helipad.pos1.y, jobData.helipad.pos1.z
+            })
+        end
+        if jobData.helipad.pos2 then
+            MySQL.insert.await('INSERT INTO hposlovi_positions (job_name, position_type, x, y, z, heading) VALUES (?, ?, ?, ?, ?, ?)', {
+                jobData.job, 'helipad_spawn', jobData.helipad.pos2.x, jobData.helipad.pos2.y, jobData.helipad.pos2.z, jobData.helipad.heading or 0.0
+            })
+        end
+    end
+    
     -- Delete old inventories and save new ones
     MySQL.query.await('DELETE FROM hposlovi_inventories WHERE job_name = ?', {jobData.job})
     
@@ -291,6 +440,7 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
             label = job.job_label,
             bossmenu = { pos = false, gradoboss = 4 },  -- false encodes as null in JSON but keeps it an object
             garage   = { pos1 = false, pos2 = false, heading = 0.0 },
+            helipad  = { pos1 = false, pos2 = false, heading = 0.0 },
             inv = {},
             gradi = {}
         }
@@ -311,6 +461,11 @@ lib.callback.register('hPoslovi:server:getAllJobs', function(source)
             elseif pos.position_type == 'garage_spawn' then
                 jobData.garage.pos2 = {x = pos.x, y = pos.y, z = pos.z}
                 jobData.garage.heading = pos.heading or 0.0
+            elseif pos.position_type == 'helipad_retrieve' then
+                jobData.helipad.pos1 = {x = pos.x, y = pos.y, z = pos.z}
+            elseif pos.position_type == 'helipad_spawn' then
+                jobData.helipad.pos2 = {x = pos.x, y = pos.y, z = pos.z}
+                jobData.helipad.heading = pos.heading or 0.0
             elseif pos.position_type == 'inventory' and pos.extra_data then
                 local extra = json.decode(pos.extra_data)
                 local invIdx = tonumber(pos.position_id) or #jobData.inv + 1
@@ -361,8 +516,9 @@ end)
 -- VEHICLE SYSTEM
 -- ========================================
 
-lib.callback.register('hPoslovi:server:getJobVehicles', function(source, jobName)
-    local vehicles = MySQL.query.await('SELECT * FROM hposlovi_vehicles WHERE job_name = ?', {jobName})
+lib.callback.register('hPoslovi:server:getJobVehicles', function(source, jobName, vehicleType)
+    vehicleType = vehicleType or 'car'
+    local vehicles = MySQL.query.await('SELECT * FROM hposlovi_vehicles WHERE job_name = ? AND vehicle_type = ?', {jobName, vehicleType})
     return vehicles or {}
 end)
 
@@ -370,7 +526,7 @@ RegisterNetEvent('hPoslovi:server:addVehicle', function(jobName, vehicleData)
     local xPlayer = ESX.GetPlayerFromId(source)
     if not CheckPerms(source) then return end
     
-    local result = MySQL.insert.await('INSERT INTO hposlovi_vehicles (job_name, label, model, color_r, color_g, color_b, plate, fullkit, min_grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', {
+    local result = MySQL.insert.await('INSERT INTO hposlovi_vehicles (job_name, label, model, color_r, color_g, color_b, plate, fullkit, min_grade, vehicle_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', {
         jobName,
         vehicleData.label,
         vehicleData.model,
@@ -379,7 +535,8 @@ RegisterNetEvent('hPoslovi:server:addVehicle', function(jobName, vehicleData)
         vehicleData.color_b or 255,
         vehicleData.plate,
         vehicleData.fullkit and 1 or 0,
-        vehicleData.min_grade or 0
+        vehicleData.min_grade or 0,
+        vehicleData.vehicle_type or 'car'
     })
     
     if result then
@@ -436,3 +593,5 @@ RegisterCommand(Config.CreateCommand, function(source)
         TriggerClientEvent("hPoslovi:client:openCreateMenu", source)
     end
 end)
+
+

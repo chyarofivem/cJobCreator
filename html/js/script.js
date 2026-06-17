@@ -10,6 +10,7 @@ let datafaz = {
     bossmenu: { gradoboss: 4 },
     camerino: null,
     garage: { pos1: null, pos2: null, heading: 0.0 },
+    helipad: { pos1: null, pos2: null, heading: 0.0 },
     inv: [],
     gradi: []
 };
@@ -94,6 +95,21 @@ $(document).ready(function () {
         });
     });
 
+    $('#set-helipad-pos1 button').click(function () {
+        getCoordinates('helipad_pickup', function (coords) {
+            datafaz.helipad.pos1 = { x: coords.x, y: coords.y, z: coords.z };
+            $('#helipad-pos1-coords').text(`X: ${coords.x.toFixed(2)}, Y: ${coords.y.toFixed(2)}, Z: ${coords.z.toFixed(2)}`);
+        });
+    });
+
+    $('#set-helipad-pos2 button').click(function () {
+        getCoordinates('helipad_spawn', function (coords) {
+            datafaz.helipad.pos2 = { x: coords.x, y: coords.y, z: coords.z };
+            datafaz.helipad.heading = coords.heading;
+            $('#helipad-pos2-coords').text(`X: ${coords.x.toFixed(2)}, Y: ${coords.y.toFixed(2)}, Z: ${coords.z.toFixed(2)} | H: ${coords.heading.toFixed(2)}`);
+        });
+    });
+
     $('#set-inv-coords').click(function () {
         getCoordinates('inventory', function (coords) {
             $('#inv-coords').text(`X: ${coords.x.toFixed(2)}, Y: ${coords.y.toFixed(2)}, Z: ${coords.z.toFixed(2)}`);
@@ -152,44 +168,57 @@ $(document).ready(function () {
             return;
         }
 
-        // Convert hex color to rgb
         const rgb = hexToRgb(color);
-
-        // Send immediately to database via client if modifying, or hold in datafaz
         const newVeh = {
-            label: label,
-            model: model,
-            fullkit: fullkit,
-            plate: plate,
-            min_grade: grade,
-            color_r: rgb.r,
-            color_g: rgb.g,
-            color_b: rgb.b
+            label: label, model: model, fullkit: fullkit, plate: plate,
+            min_grade: grade, color_r: rgb.r, color_g: rgb.g, color_b: rgb.b
         };
 
         if (isModifying) {
-            // Modify mode saves immediately
-            $.post(`https://${GetParentResourceName()}/addVehicle`, JSON.stringify({
-                job: datafaz.job,
-                vehicle: newVeh
-            }));
-            setTimeout(() => {
-                refreshVehiclesList();
-            }, 300);
+            $.post(`https://${GetParentResourceName()}/addVehicle`, JSON.stringify({ job: datafaz.job, vehicle: newVeh }));
+            setTimeout(() => { refreshVehiclesList(); }, 300);
         } else {
-            // Create mode holds in memory
             if (!datafaz.garage.veicoli) datafaz.garage.veicoli = [];
             datafaz.garage.veicoli.push(newVeh);
             renderCreatorVehiclesList();
         }
 
-        // Reset fields
-        $('#veh-label').val('');
-        $('#veh-model').val('');
-        $('#veh-color').val('#ffffff');
-        $('#veh-plate').val('');
-        $('#veh-grade').val('0');
-        $('#veh-fullkit').prop('checked', false);
+        $('#veh-label').val(''); $('#veh-model').val(''); $('#veh-color').val('#ffffff');
+        $('#veh-plate').val(''); $('#veh-grade').val('0'); $('#veh-fullkit').prop('checked', false);
+    });
+
+    // Creator helicopter adding
+    $('#add-helivehicle-btn').click(function () {
+        const label = $('#heli-label').val().trim();
+        const model = $('#heli-model').val().trim().toUpperCase();
+        const color = $('#heli-color').val();
+        const fullkit = $('#heli-fullkit').is(':checked');
+        const plate = $('#heli-plate').val().trim();
+        const grade = parseInt($('#heli-grade').val()) || 0;
+
+        if (!label || !model) {
+            showNotifyModal(locale('compile', 'Molimo ispravno ispunite sva polja'));
+            return;
+        }
+
+        const rgb = hexToRgb(color);
+        const newHeli = {
+            label: label, model: model, fullkit: fullkit, plate: plate,
+            min_grade: grade, color_r: rgb.r, color_g: rgb.g, color_b: rgb.b,
+            vehicle_type: 'heli'
+        };
+
+        if (isModifying) {
+            $.post(`https://${GetParentResourceName()}/addHeliVehicle`, JSON.stringify({ job: datafaz.job, vehicle: newHeli }));
+            setTimeout(() => { refreshHelipadVehiclesList(); }, 300);
+        } else {
+            if (!datafaz.helipad.veicoli) datafaz.helipad.veicoli = [];
+            datafaz.helipad.veicoli.push(newHeli);
+            renderHelipadVehiclesList();
+        }
+
+        $('#heli-label').val(''); $('#heli-model').val(''); $('#heli-color').val('#ffffff');
+        $('#heli-plate').val(''); $('#heli-grade').val('0'); $('#heli-fullkit').prop('checked', false);
     });
 
     // Creator grade adding
@@ -290,6 +319,8 @@ $(document).ready(function () {
                 setupCreatorMode(item.data);
             } else if (activeMode === 'garage') {
                 setupGarageMode(item.vehicles || [], item.job);
+            } else if (activeMode === 'helipad') {
+                setupHelipadMode(item.vehicles || [], item.job);
             } else if (activeMode === 'wardrobe') {
                 setupWardrobeMode(item.outfits || [], item.job, item.canManage);
             }
@@ -387,15 +418,24 @@ window.deleteCreatorVehicle = function(index) {
     });
 };
 
+window.deleteHeliCreatorVehicle = function(index) {
+    showConfirmModal(locale('deleteveh', 'Obriši vozilo'), locale('deleteveh2', 'Želite li ukloniti ovo vozilo s popisa?'), function () {
+        datafaz.helipad.veicoli.splice(index, 1);
+        renderHelipadVehiclesList();
+    });
+};
+
 window.deleteDatabaseVehicle = function(vehicleId) {
     showConfirmModal(locale('deleteveh', 'Obriši vozilo'), locale('deleteveh2', 'Želite li ukloniti ovo vozilo s popisa?'), function () {
-        $.post(`https://${GetParentResourceName()}/deleteVehicle`, JSON.stringify({
-            id: vehicleId,
-            job: datafaz.job
-        }));
-        setTimeout(() => {
-            refreshVehiclesList();
-        }, 300);
+        $.post(`https://${GetParentResourceName()}/deleteVehicle`, JSON.stringify({ id: vehicleId, job: datafaz.job }));
+        setTimeout(() => { refreshVehiclesList(); }, 300);
+    });
+};
+
+window.deleteDatabaseHeliVehicle = function(vehicleId) {
+    showConfirmModal(locale('deleteveh', 'Obriši vozilo'), locale('deleteveh2', 'Želite li ukloniti ovo vozilo s popisa?'), function () {
+        $.post(`https://${GetParentResourceName()}/deleteVehicle`, JSON.stringify({ id: vehicleId, job: datafaz.job }));
+        setTimeout(() => { refreshHelipadVehiclesList(); }, 300);
     });
 };
 
@@ -502,6 +542,8 @@ function setupCreatorMode(existingJobData) {
     // Switch to general tab
     $('.tab-btn').removeClass('active');
     $('.tab-btn[data-tab="general"]').addClass('active');
+    // Hide all runtime mode containers and show creator tabs
+    $('.mode-container').removeClass('active');
     $('.tab-content').removeClass('active');
     $('#tab-general').addClass('active');
 
@@ -539,6 +581,17 @@ function setupCreatorMode(existingJobData) {
             bossmenu: normalBossMenu,
             camerino: existingJobData.camerino || null,
             garage: normalGarage,
+            helipad: (function() {
+                let raw = existingJobData.helipad;
+                if (raw && !Array.isArray(raw)) {
+                    return {
+                        pos1:    (raw.pos1 && typeof raw.pos1 === 'object') ? raw.pos1 : null,
+                        pos2:    (raw.pos2 && typeof raw.pos2 === 'object') ? raw.pos2 : null,
+                        heading: raw.heading || 0.0
+                    };
+                }
+                return { pos1: null, pos2: null, heading: 0.0 };
+            })(),
             inv: existingJobData.inv || [],
             gradi: existingJobData.gradi || []
         };
@@ -551,6 +604,7 @@ function setupCreatorMode(existingJobData) {
             bossmenu: { gradoboss: 4 },
             camerino: null,
             garage: { pos1: null, pos2: null, heading: 0.0, veicoli: [] },
+            helipad: { pos1: null, pos2: null, heading: 0.0 },
             inv: [],
             gradi: []
         };
@@ -590,13 +644,28 @@ function setupCreatorMode(existingJobData) {
         $('#garage-pos2-coords').text(locale('not_set', 'Nije postavljeno'));
     }
 
+    // Render Helipad Coordinates text
+    if (datafaz.helipad && datafaz.helipad.pos1) {
+        $('#helipad-pos1-coords').text(`X: ${datafaz.helipad.pos1.x.toFixed(2)}, Y: ${datafaz.helipad.pos1.y.toFixed(2)}, Z: ${datafaz.helipad.pos1.z.toFixed(2)}`);
+    } else {
+        $('#helipad-pos1-coords').text(locale('not_set', 'Nije postavljeno'));
+    }
+
+    if (datafaz.helipad && datafaz.helipad.pos2) {
+        $('#helipad-pos2-coords').text(`X: ${datafaz.helipad.pos2.x.toFixed(2)}, Y: ${datafaz.helipad.pos2.y.toFixed(2)}, Z: ${datafaz.helipad.pos2.z.toFixed(2)} | H: ${datafaz.helipad.heading.toFixed(2)}`);
+    } else {
+        $('#helipad-pos2-coords').text(locale('not_set', 'Nije postavljeno'));
+    }
+
     // Render lists
     renderInventoryList();
     
     if (isModifying) {
         refreshVehiclesList();
+        refreshHelipadVehiclesList();
     } else {
         renderCreatorVehiclesList();
+        renderHelipadVehiclesList();
     }
     
     renderGradesList();
@@ -640,14 +709,11 @@ function deleteStash(index) {
 function renderCreatorVehiclesList() {
     const list = $('#creator-vehicles-list');
     list.empty();
-
     const veicoli = datafaz.garage.veicoli || [];
-
     if (veicoli.length === 0) {
         list.append(`<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">${locale('vehiclenotavaible', 'Nema dodanih vozila.')}</div>`);
         return;
     }
-
     veicoli.forEach((veh, index) => {
         const fullkitText = veh.fullkit ? ' | Full Tuning' : '';
         const colorHex = rgbToHex(veh.color_r || 255, veh.color_g || 255, veh.color_b || 255);
@@ -660,9 +726,34 @@ function renderCreatorVehiclesList() {
                         <span class="list-item-sub">${veh.model}${fullkitText} | Grade: ${veh.min_grade}</span>
                     </div>
                 </div>
-                <button class="btn-delete-item" onclick="deleteCreatorVehicle(${index})">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
+                <button class="btn-delete-item" onclick="deleteCreatorVehicle(${index})"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `);
+    });
+}
+
+// Helipad Vehicle rendering (create mode)
+function renderHelipadVehiclesList() {
+    const list = $('#creator-helivehicles-list');
+    list.empty();
+    const veicoli = datafaz.helipad.veicoli || [];
+    if (veicoli.length === 0) {
+        list.append(`<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">${locale('vehiclenotavaible', 'Nema dodanih helikoptera.')}</div>`);
+        return;
+    }
+    veicoli.forEach((veh, index) => {
+        const fullkitText = veh.fullkit ? ' | Full Tuning' : '';
+        const colorHex = rgbToHex(veh.color_r || 255, veh.color_g || 255, veh.color_b || 255);
+        list.append(`
+            <div class="list-item">
+                <div class="list-item-info">
+                    <div class="list-item-icon" style="color:${colorHex}"><i class="fa-solid fa-helicopter"></i></div>
+                    <div>
+                        <span class="list-item-title">${veh.label}</span>
+                        <span class="list-item-sub">${veh.model}${fullkitText} | Grade: ${veh.min_grade}</span>
+                    </div>
+                </div>
+                <button class="btn-delete-item" onclick="deleteHeliCreatorVehicle(${index})"><i class="fa-solid fa-trash"></i></button>
             </div>
         `);
     });
@@ -675,17 +766,22 @@ function deleteCreatorVehicle(index) {
     });
 }
 
-// Fetch Vehicles from server callback (Edit mode)
+function deleteHeliCreatorVehicle(index) {
+    showConfirmModal(locale('deleteveh', 'Obriši helikopter'), locale('deleteveh2', 'Želite li ukloniti ovaj helikopter s popisa?'), function () {
+        datafaz.helipad.veicoli.splice(index, 1);
+        renderHelipadVehiclesList();
+    });
+}
+
+// Fetch Vehicles from server callback (Edit mode - cars)
 function refreshVehiclesList() {
     $.post(`https://${GetParentResourceName()}/getJobVehicles`, JSON.stringify({ job: datafaz.job }), function (vehicles) {
         const list = $('#creator-vehicles-list');
         list.empty();
-
         if (!vehicles || vehicles.length === 0) {
             list.append(`<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">${locale('vehiclenotavaible', 'Nema dodanih vozila.')}</div>`);
             return;
         }
-
         vehicles.forEach((veh) => {
             const fullkitText = veh.fullkit === 1 || veh.fullkit === true ? ' | Full Tuning' : '';
             const colorHex = rgbToHex(veh.color_r || 255, veh.color_g || 255, veh.color_b || 255);
@@ -698,9 +794,35 @@ function refreshVehiclesList() {
                             <span class="list-item-sub">${veh.model}${fullkitText} | Grade: ${veh.min_grade}</span>
                         </div>
                     </div>
-                    <button class="btn-delete-item" onclick="deleteDatabaseVehicle(${veh.id})">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    <button class="btn-delete-item" onclick="deleteDatabaseVehicle(${veh.id})"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `);
+        });
+    });
+}
+
+// Fetch Helipad Vehicles from server callback (Edit mode - helis)
+function refreshHelipadVehiclesList() {
+    $.post(`https://${GetParentResourceName()}/getJobHeliVehicles`, JSON.stringify({ job: datafaz.job }), function (vehicles) {
+        const list = $('#creator-helivehicles-list');
+        list.empty();
+        if (!vehicles || vehicles.length === 0) {
+            list.append(`<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">${locale('vehiclenotavaible', 'Nema dodanih helikoptera.')}</div>`);
+            return;
+        }
+        vehicles.forEach((veh) => {
+            const fullkitText = veh.fullkit === 1 || veh.fullkit === true ? ' | Full Tuning' : '';
+            const colorHex = rgbToHex(veh.color_r || 255, veh.color_g || 255, veh.color_b || 255);
+            list.append(`
+                <div class="list-item">
+                    <div class="list-item-info">
+                        <div class="list-item-icon" style="color:${colorHex}"><i class="fa-solid fa-helicopter"></i></div>
+                        <div>
+                            <span class="list-item-title">${veh.label}</span>
+                            <span class="list-item-sub">${veh.model}${fullkitText} | Grade: ${veh.min_grade}</span>
+                        </div>
+                    </div>
+                    <button class="btn-delete-item" onclick="deleteDatabaseHeliVehicle(${veh.id})"><i class="fa-solid fa-trash"></i></button>
                 </div>
             `);
         });
@@ -872,6 +994,56 @@ function saveJobConfig() {
         isModifying: isModifying
     }));
     closeUI();
+}
+
+// SETUP HELIPAD RETRIEVE MODE
+function setupHelipadMode(vehicles, jobName) {
+    $('#creator-tabs').hide();
+    $('.tab-content').removeClass('active');
+
+    $('#sidebar-main-title').text(locale('helipadtitle', 'Heliodrom Posla'));
+    $('#sidebar-sub-title').text(jobName.toUpperCase());
+
+    $('#sidebar-mode-desc').text(locale('helipad_desc', 'Preuzmite helikopter registriran za vašu frakciju.'));
+    $('#sidebar-mode-info').show();
+
+    $('#garage-mode-container').removeClass('active');
+    $('#helipad-mode-container').addClass('active');
+    $('#wardrobe-mode-container').removeClass('active');
+
+    const grid = $('#helipad-vehicles-grid');
+    grid.empty();
+
+    if (vehicles.length === 0) {
+        grid.append(`<div style="color:var(--text-secondary);font-size:14px;grid-column: span 2;text-align:center;padding:40px 0;">${locale('vehiclenotavaible', 'Nema dostupnih helikoptera za vaš rang.')}</div>`);
+        return;
+    }
+
+    vehicles.forEach(veh => {
+        const colorHex = rgbToHex(veh.color_r || 255, veh.color_g || 255, veh.color_b || 255);
+        const gradeText = veh.min_grade ? locale('min_grade', `Minimalni rang: ${veh.min_grade}`) : locale('no_grade_required', 'Rang nije potreban');
+
+        const card = $(`
+            <div class="vehicle-card">
+                <div class="vehicle-card-details">
+                    <span class="vehicle-card-name">${veh.label}</span>
+                    <span class="vehicle-card-model">${veh.model}</span>
+                    <span class="vehicle-card-grade"><i class="fa-solid fa-helicopter"></i> ${gradeText}</span>
+                </div>
+                <div class="vehicle-card-color" style="background-color:${colorHex}"></div>
+            </div>
+        `);
+
+        card.click(function () {
+            $.post(`https://${GetParentResourceName()}/spawnHelicopter`, JSON.stringify({
+                vehicle: veh,
+                helipad: datafaz.helipad
+            }));
+            closeUI();
+        });
+
+        grid.append(card);
+    });
 }
 
 // SETUP GARAGE RETRIEVE MODE

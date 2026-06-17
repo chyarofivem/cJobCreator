@@ -83,7 +83,7 @@ function ApriGarage(data, job)
         return
     end
 
-    -- Load vehicles from database
+    -- Load car vehicles from database (car type only)
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
         local PlayerData = ESX.GetPlayerData()
         local availableVehicles = {}
@@ -104,7 +104,7 @@ function ApriGarage(data, job)
             job = job,
             locales = GetLocalesTable()
         })
-    end, job)
+    end, job, 'car')
 end
 
 -- SPAWN VEHICLE FUNCTION - DATABASE VERSION
@@ -225,6 +225,156 @@ function SpawnJobVehicle(vehicleData, garageData)
     Notify(locale('vehspawned'))
 end
 
+-- HELIPAD GARAGE FUNCTION (Player Usage) - NUI VERSION
+function ApriHelipad(data, job)
+    local jobData = nil
+    for k,v in pairs(data) do
+        if v.job == job then 
+            jobData = v 
+            break 
+        end
+    end
+
+    if not jobData then 
+        Notify(locale('job_data_not_found'))
+        return 
+    end
+
+    -- Ensure helipad structure exists
+    if not jobData.helipad then
+        Notify(locale('helipad_not_configured'))
+        return
+    end
+
+    -- Load helicopter vehicles from database (heli type only)
+    lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
+        local PlayerData = ESX.GetPlayerData()
+        local availableVehicles = {}
+        
+        if vehicles and #vehicles > 0 then
+            for idx, vehicle in ipairs(vehicles) do
+                if PlayerData.job.grade >= (tonumber(vehicle.min_grade) or 0) then
+                    table.insert(availableVehicles, vehicle)
+                end
+            end
+        end
+
+        SetNuiFocus(true, true)
+        SendNUIMessage({
+            action = 'open',
+            mode = 'helipad',
+            vehicles = availableVehicles,
+            job = job,
+            locales = GetLocalesTable()
+        })
+    end, job, 'heli')
+end
+
+-- SPAWN HELICOPTER FUNCTION
+function SpawnJobHelicopter(vehicleData, helipadData)
+    local PlayerData = ESX.GetPlayerData()
+    
+    local args = vehicleData.args or vehicleData
+    local gradoJob = tonumber(args.grado or args.min_grade) or 0
+    
+    -- Grade Check
+    if PlayerData.job.grade < gradoJob then
+        Notify(locale('gradobasso'))
+        return
+    end
+
+    -- Validate spawn point
+    if not helipadData.pos2 then 
+        Notify(locale('helipad_spawn_not_set')) 
+        return 
+    end
+
+    local spawnCoords = vector3(helipadData.pos2.x, helipadData.pos2.y, helipadData.pos2.z)
+    local heading = helipadData.heading or 0.0
+
+    -- Model validation
+    local model = args.model or vehicleData.model
+    local modelHash = type(model) == 'string' and joaat(model) or model
+    
+    if not IsModelInCdimage(modelHash) then 
+        Notify(locale('invalid_model_msg', tostring(model))) 
+        return 
+    end
+
+    if not IsModelAVehicle(modelHash) then
+        Notify(locale('model_not_vehicle', tostring(model)))
+        return
+    end
+
+    -- Load model
+    RequestModel(modelHash)
+    local timeout = 0
+    while not HasModelLoaded(modelHash) and timeout < 5000 do 
+        Wait(10) 
+        timeout = timeout + 10
+    end
+
+    if not HasModelLoaded(modelHash) then
+        Notify(locale('failed_load_veh'))
+        return
+    end
+
+    -- Create helicopter
+    local vehicle = CreateVehicle(modelHash, spawnCoords.x, spawnCoords.y, spawnCoords.z, heading, true, false)
+    
+    if not DoesEntityExist(vehicle) then
+        Notify(locale('failed_create_veh'))
+        SetModelAsNoLongerNeeded(modelHash)
+        return
+    end
+
+    local vehicleTimeout = 0
+    while not DoesEntityExist(vehicle) and vehicleTimeout < 2000 do
+        Wait(10)
+        vehicleTimeout = vehicleTimeout + 10
+    end
+
+    -- Essential Network & Entity setup
+    SetEntityAsMissionEntity(vehicle, true, true)
+    SetVehicleHasBeenOwnedByPlayer(vehicle, true)
+    SetVehicleNeedsToBeHotwired(vehicle, false)
+    SetVehRadioStation(vehicle, 'OFF')
+    
+    -- Handle Color
+    if vehicleData.color_r and vehicleData.color_g and vehicleData.color_b then
+        SetVehicleCustomPrimaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
+        SetVehicleCustomSecondaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
+    elseif args.colore then
+        local r = args.colore.r or args.colore.x or 255
+        local g = args.colore.g or args.colore.y or 255
+        local b = args.colore.b or args.colore.z or 255
+        SetVehicleCustomPrimaryColour(vehicle, r, g, b)
+        SetVehicleCustomSecondaryColour(vehicle, r, g, b)
+    end
+
+    -- Handle Plate
+    local plate = vehicleData.plate or args.targa
+    if plate and plate ~= "" then
+        SetVehicleNumberPlateText(vehicle, tostring(plate))
+    end
+
+    -- Handle Mods
+    local fullkit = vehicleData.fullkit == 1 or args.fullkit
+    if fullkit then
+        SetVehicleModKit(vehicle, 0)
+        SetVehicleMod(vehicle, 11, 3, false)
+        SetVehicleMod(vehicle, 12, 2, false)
+        SetVehicleMod(vehicle, 13, 2, false)
+        SetVehicleMod(vehicle, 15, 3, false)
+        ToggleVehicleMod(vehicle, 18, true)
+        ToggleVehicleMod(vehicle, 22, true)
+    end
+
+    SetModelAsNoLongerNeeded(modelHash)
+    TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
+    Notify(locale('vehspawned'))
+end
+
 
 
 function ApriMenu(label, job, modifica, selezionata)
@@ -307,10 +457,28 @@ RegisterNUICallback('getJobVehicles', function(data, cb)
     if data and data.job then
         lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
             cb(vehicles or {})
-        end, data.job)
+        end, data.job, 'car')
     else
         cb({})
     end
+end)
+
+RegisterNUICallback('getJobHeliVehicles', function(data, cb)
+    if data and data.job then
+        lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
+            cb(vehicles or {})
+        end, data.job, 'heli')
+    else
+        cb({})
+    end
+end)
+
+RegisterNUICallback('addHeliVehicle', function(data, cb)
+    if data and data.job and data.vehicle then
+        data.vehicle.vehicle_type = 'heli'
+        TriggerServerEvent('hPoslovi:server:addVehicle', data.job, data.vehicle)
+    end
+    cb('ok')
 end)
 
 RegisterNUICallback('saveJob', function(data, cb)
@@ -341,6 +509,13 @@ end)
 RegisterNUICallback('spawnVehicle', function(data, cb)
     if data and data.vehicle and data.garage then
         SpawnJobVehicle(data.vehicle, data.garage)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('spawnHelicopter', function(data, cb)
+    if data and data.vehicle and data.helipad then
+        SpawnJobHelicopter(data.vehicle, data.helipad)
     end
     cb('ok')
 end)
@@ -437,6 +612,8 @@ function CreaMark(data)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'camerino'..v.job)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'garage1'..v.job)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'garage2'..v.job)
+        TriggerEvent('ox_gridsystem:unregisterMarker', 'helipad1'..v.job)
+        TriggerEvent('ox_gridsystem:unregisterMarker', 'helipad2'..v.job)
 
         -- Unregister ALL previously registered inventory markers for this job
         -- This ensures stale markers from previous configs are fully removed
@@ -592,6 +769,63 @@ function CreaMark(data)
                 })
             end
         end
+
+        -- HELIPAD MARKERS
+        if v.helipad and v.helipad.pos1 then
+            DebugLog('Registering helipad markers for ' .. v.job)
+            TriggerEvent('ox_gridsystem:registerMarker', {
+                name = 'helipad1'..v.job,
+                pos = vector3(v.helipad.pos1.x, v.helipad.pos1.y, v.helipad.pos1.z),
+                size = Config.MarkerSize,
+                scale = Config.MarkerSize,
+                type = Config.MarkerType,
+                drawDistance = Config.MarkerDrawDistance,
+                interactDistance = Config.InteractDistance,
+                color = Config.MarkerColor,
+                msg = locale('texuihelipad1'),
+                permission = v.job,
+                jobGrade = 0,
+                texture = Config.Helipad1Marker,
+                textureDict = Config.MarkerYTD,
+                action = function()
+                    ApriHelipad(data, v.job)
+                end,
+                onExit = function()
+                    SetNuiFocus(false, false)
+                    SendNUIMessage({ action = 'close' })
+                end
+            })
+            
+            if v.helipad.pos2 then
+                TriggerEvent('ox_gridsystem:registerMarker', {
+                    name = 'helipad2'..v.job,
+                    pos = vector3(v.helipad.pos2.x, v.helipad.pos2.y, v.helipad.pos2.z),
+                    size = Config.MarkerSize,
+                    scale = Config.MarkerSize,
+                    type = Config.MarkerType,
+                    drawDistance = Config.MarkerDrawDistance,
+                    interactDistance = Config.InteractDistance,
+                    color = Config.MarkerColor,
+                    msg = locale('texuihelipad2'),
+                    permission = v.job,
+                    jobGrade = 0,
+                    texture = Config.Helipad2Marker,
+                    textureDict = Config.MarkerYTD,
+                    action = function()
+                        if IsPedInAnyVehicle(PlayerPedId()) then
+                            ESX.Game.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
+                            Notify(locale('vehdeposited'))
+                        else
+                            Notify(locale('notveh'))
+                        end
+                    end,
+                    onExit = function()
+                        SetNuiFocus(false, false)
+                        SendNUIMessage({ action = 'close' })
+                    end
+                })
+            end
+        end
     end
     
     DebugLog('Marker creation complete')
@@ -604,3 +838,22 @@ RegisterNetEvent('hPoslovi:client:refreshVehicles', function(jobName)
         -- Menu will auto-refresh when reopened
     end
 end)
+
+-- BAZA COMMAND - set GPS waypoint to Vehicle Get (garage_retrieve) position
+RegisterCommand(Config.BaseCommand, function()
+    local PlayerData = ESX.GetPlayerData()
+    local jobName = PlayerData and PlayerData.job and PlayerData.job.name
+
+    if not jobName or jobName == 'unemployed' then
+        Notify(locale('noperms'))
+        return
+    end
+
+    lib.callback('hPoslovi:server:getGarageRetrievePos', false, function(pos)
+        if pos and pos.x and pos.y then
+            SetNewWaypoint(pos.x, pos.y)
+        else
+            Notify(locale('garage_not_configured'))
+        end
+    end, jobName)
+end, false)

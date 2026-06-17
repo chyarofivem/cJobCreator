@@ -183,5 +183,20 @@
     "sidebar_creator_desc": "cPoslovi",
     "garage_desc": "Retrieve vehicles registered to your faction.",
     "wardrobe_desc": "Wear uniforms or save your current appearance.",
-    "select_job_edit": "Select Job"
+    "select_job_edit": "Select Job",
+    "helipad": "Helipad",
+    "helipadtitle": "JOB HELIPAD",
+    "helipad_desc": "Retrieve a helicopter registered to your faction.",
+    "helipad_not_configured": "Helipad not configured for this job!",
+    "helipad_spawn_not_set": "Helipad spawn point not set!",
+    "creator_helipad_title": "Helipad & Helicopter Settings",
+    "creator_helipad_desc": "Define the helicopter retrieval and spawn positions for the faction. Helicopters share the same vehicle list as the garage.",
+    "helipad_pickup_coords": "Retrieval Trigger Position",
+    "helipad_spawn_coords": "Helicopter Spawn Position & Heading",
+    "helipad_vehicles_shared": "Helicopters use the same vehicle list as the garage. Add vehicles in the Garage tab.",
+    "texuihelipad1": "RETRIEVE HELICOPTER",
+    "texuihelipad2": "STORE HELICOPTER",
+    "current_helis": "Available Helicopters",
+    "add_new_heli": "Add New Helicopter",
+    "add_new_heli_btn": "Add Helicopter"
 }
