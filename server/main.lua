@@ -1,14 +1,8 @@
-
--- ========================================
--- hPoslovi Server - V1.0 Release
--- ESX Society + Illenium Appearance Only
--- ========================================
-
 lib.locale(Config.Locale)
 lib.versionCheck('chyarofivem/cJobCreator')
 
 local jobOutfits = {}
-
+local dbInitialized = false
 
 -- Helper function for debug logging
 local function DebugLog(message)
@@ -18,24 +12,20 @@ local function DebugLog(message)
 end
 
 -- ========================================
--- INITIALIZATION
+-- INITIALIZATION & BOOTSTRAP (MySQL.ready)
 -- ========================================
 
-CreateThread(function()
-    Wait(1000)
+MySQL.ready(function()
+    DebugLog("oxmysql is ready, starting schema bootstrap...")
 
-    -- ============================================================
-    -- SCHEMA BOOTSTRAP: Create tables if they don't exist yet
-    -- ============================================================
-
+    -- Schema Bootstrap: Create tables if they don't exist yet
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `hposlovi_jobs` (
             `id`          int(11)      NOT NULL AUTO_INCREMENT,
             `job_name`    varchar(50)  NOT NULL UNIQUE,
             `job_label`   varchar(100) NOT NULL,
             `created_at`  timestamp    DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (`id`),
-            KEY `job_name` (`job_name`)
+            PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ]], {})
 
@@ -111,17 +101,11 @@ CreateThread(function()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ]], {})
 
-    -- ============================================================
-    -- SCHEMA MIGRATION: Ensure position_type is varchar(50).
-    -- If the column was created as an ENUM (or too-small varchar)
-    -- this widens it so helipad_retrieve / helipad_spawn fit.
-    -- ============================================================
     MySQL.query.await([[
         ALTER TABLE `hposlovi_positions`
         MODIFY COLUMN `position_type` varchar(50) NOT NULL
     ]], {})
 
-    -- Add vehicle_type to existing installations (silently ignored if already present)
     pcall(function()
         MySQL.query.await([[
             ALTER TABLE `hposlovi_vehicles`
@@ -129,11 +113,18 @@ CreateThread(function()
         ]], {})
     end)
 
+    -- Add job_grades column to hposlovi_jobs if it doesn't exist yet (migration)
+    pcall(function()
+        MySQL.query.await([[
+            ALTER TABLE `hposlovi_jobs`
+            ADD COLUMN `job_grades` longtext DEFAULT NULL
+        ]], {})
+        DebugLog("Checked for job_grades column in hposlovi_jobs table.")
+    end)
+
     print('[hPoslovi] Schema bootstrap complete.')
 
-    -- ============================================================
-    -- RUNTIME INIT: Load inventories & outfits into memory
-    -- ============================================================
+    -- Runtime Load
     DebugLog('Loading jobs from database...')
     local jobs = MySQL.query.await('SELECT * FROM hposlovi_jobs', {})
     
@@ -162,9 +153,12 @@ CreateThread(function()
         end
     end
     
+    -- Register jobs dynamically in framework memory
+    Framework.InitStartupJobs()
+    
+    dbInitialized = true
     print('[hPoslovi] Database initialization complete!')
 end)
-
 
 -- ========================================
 -- OUTFIT SYSTEM
@@ -172,6 +166,7 @@ end)
 
 -- Get boss grade for a job
 lib.callback.register('hPoslovi:server:getBossGrade', function(source, jobName)
+    while not dbInitialized do Wait(50) end
     local bossMenu = MySQL.single.await('SELECT extra_data FROM hposlovi_positions WHERE job_name = ? AND position_type = "bossmenu" LIMIT 1', {jobName})
     if bossMenu and bossMenu.extra_data then
         local extra = json.decode(bossMenu.extra_data)
@@ -180,8 +175,9 @@ lib.callback.register('hPoslovi:server:getBossGrade', function(source, jobName)
     return nil
 end)
 
--- Get garage_retrieve position for a job (used by /baza client command)
+-- Get garage_retrieve position for a job
 lib.callback.register('hPoslovi:server:getGarageRetrievePos', function(source, jobName)
+    while not dbInitialized do Wait(50) end
     local pos = MySQL.single.await(
         'SELECT x, y, z FROM hposlovi_positions WHERE job_name = ? AND position_type = "garage_retrieve" LIMIT 1',
         { jobName }
@@ -192,8 +188,9 @@ lib.callback.register('hPoslovi:server:getGarageRetrievePos', function(source, j
     return nil
 end)
 
--- Get helipad_retrieve position for a job (used by /helipad client command)
+-- Get helipad_retrieve position for a job
 lib.callback.register('hPoslovi:server:getHelipadRetrievePos', function(source, jobName)
+    while not dbInitialized do Wait(50) end
     local pos = MySQL.single.await(
         'SELECT x, y, z FROM hposlovi_positions WHERE job_name = ? AND position_type = "helipad_retrieve" LIMIT 1',
         { jobName }
@@ -204,13 +201,22 @@ lib.callback.register('hPoslovi:server:getHelipadRetrievePos', function(source, 
     return nil
 end)
 
--- Save outfit for job (sboss grade or higher only)
+-- Save outfit for job
 RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, outfitData)
-    local xPlayer = ESX.GetPlayerFromId(source)
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
     if not xPlayer then return end
     
-    if xPlayer.job.name ~= jobName then
-        xPlayer.showNotification(locale('not_part_of_job'))
+    local pJobName, pJobGrade = nil, nil
+    if Framework.Type == 'esx' then
+        pJobName, pJobGrade = xPlayer.job.name, xPlayer.job.grade
+    elseif Framework.Type == 'qb' or Framework.Type == 'qbx' then
+        pJobName, pJobGrade = xPlayer.PlayerData.job.name, xPlayer.PlayerData.job.grade.level
+    end
+
+    if pJobName ~= jobName then
+        Framework.Notify(source, locale('not_part_of_job'))
         return
     end
     
@@ -219,8 +225,8 @@ RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, 
     local bossGrade = bossMenu and json.decode(bossMenu.extra_data).boss_grade or 0
     
     -- Check if player has sufficient grade (>= boss grade)
-    if xPlayer.job.grade < bossGrade then
-        xPlayer.showNotification(locale('need_grade_save_outfit', bossGrade))
+    if pJobGrade < bossGrade then
+        Framework.Notify(source, locale('need_grade_save_outfit', bossGrade))
         return
     end
     
@@ -236,29 +242,46 @@ RegisterNetEvent('hPoslovi:server:saveJobOutfit', function(jobName, outfitName, 
     end
     jobOutfits[jobName][outfitName] = outfitData
     
-    xPlayer.showNotification(locale('outfit_saved_success', outfitName))
+    Framework.Notify(source, locale('outfit_saved_success', outfitName))
     DebugLog('Outfit saved: ' .. outfitName .. ' for ' .. jobName)
 end)
 
--- Get available outfits for job (everyone can view)
+-- Get available outfits for job
 lib.callback.register('hPoslovi:server:getJobOutfits', function(source, jobName)
-    local xPlayer = ESX.GetPlayerFromId(source)
+    while not dbInitialized do Wait(50) end
+    local xPlayer = Framework.GetPlayer(source)
     if not xPlayer then return {} end
     
-    if xPlayer.job.name ~= jobName then
+    local pJobName = nil
+    if Framework.Type == 'esx' then
+        pJobName = xPlayer.job.name
+    elseif Framework.Type == 'qb' or Framework.Type == 'qbx' then
+        pJobName = xPlayer.PlayerData.job.name
+    end
+
+    if pJobName ~= jobName then
         return {}
     end
     
     return jobOutfits[jobName] or {}
 end)
 
--- Delete outfit for job (sboss grade or higher only)
+-- Delete outfit for job
 RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName)
-    local xPlayer = ESX.GetPlayerFromId(source)
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
     if not xPlayer then return end
     
-    if xPlayer.job.name ~= jobName then
-        xPlayer.showNotification(locale('not_part_of_job'))
+    local pJobName, pJobGrade = nil, nil
+    if Framework.Type == 'esx' then
+        pJobName, pJobGrade = xPlayer.job.name, xPlayer.job.grade
+    elseif Framework.Type == 'qb' or Framework.Type == 'qbx' then
+        pJobName, pJobGrade = xPlayer.PlayerData.job.name, xPlayer.PlayerData.job.grade.level
+    end
+
+    if pJobName ~= jobName then
+        Framework.Notify(source, locale('not_part_of_job'))
         return
     end
     
@@ -267,8 +290,8 @@ RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName
     local bossGrade = bossMenu and json.decode(bossMenu.extra_data).boss_grade or 0
     
     -- Check if player has sufficient grade (>= boss grade)
-    if xPlayer.job.grade < bossGrade then
-        xPlayer.showNotification(locale('need_grade_delete_outfit', bossGrade))
+    if pJobGrade < bossGrade then
+        Framework.Notify(source, locale('need_grade_delete_outfit', bossGrade))
         return
     end
     
@@ -278,7 +301,7 @@ RegisterNetEvent('hPoslovi:server:deleteJobOutfit', function(jobName, outfitName
     -- Update memory
     if jobOutfits[jobName] and jobOutfits[jobName][outfitName] then
         jobOutfits[jobName][outfitName] = nil
-        xPlayer.showNotification(locale('outfit_deleted_success', outfitName))
+        Framework.Notify(source, locale('outfit_deleted_success', outfitName))
         DebugLog('Outfit deleted: ' .. outfitName .. ' from ' .. jobName)
     end
 end)
@@ -288,37 +311,26 @@ end)
 -- ========================================
 
 RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModifying)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not CheckPerms(source) then return end
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
+    if not Framework.CheckPerms(source) then return end
     
     DebugLog((isModifying and 'Updating' or 'Creating') .. ' job: ' .. jobData.job)
-    
-    -- Create/update job in ESX
-    MySQL.Async.execute('DELETE FROM jobs WHERE name = @job', { ['@job'] = jobData.job })
-    MySQL.Async.execute('DELETE FROM job_grades WHERE job_name = @job', { ['@job'] = jobData.job })
-    
-    for _, grade in pairs(jobData.gradi) do 
-        MySQL.insert('INSERT IGNORE INTO jobs (name, label) VALUES (?, ?)', { jobData.job, jobData.label })
-        MySQL.prepare('INSERT INTO job_grades (job_name, grade, name, label, salary) VALUES (?, ?, ?, ?, ?)', {
-            jobData.job, grade.grade, grade.name, grade.label, grade.salary
-        })
-    end
-    
-    Wait(500)
-    
-    -- REFRESH JOBS AFTER CREATION/MODIFICATION
-    ESX.RefreshJobs()
-    DebugLog('Jobs refreshed after ' .. (isModifying and 'update' or 'creation'))
-    
-    if Config.AutoSetJob then
-        xPlayer.setJob(jobData.job, 0)
-    end
     
     -- Save to hPoslovi database
     if isModifying then
         MySQL.query.await('UPDATE hposlovi_jobs SET job_label = ? WHERE job_name = ?', {jobData.label, jobData.job})
     else
         MySQL.insert.await('INSERT INTO hposlovi_jobs (job_name, job_label) VALUES (?, ?)', {jobData.job, jobData.label})
+    end
+    
+    -- Update framework
+    local bossGrade = jobData.bossmenu and jobData.bossmenu.gradoboss or 4
+    Framework.CreateOrUpdateJob(jobData.job, jobData.label, jobData.gradi, bossGrade)
+    
+    if Config.AutoSetJob then
+        Framework.SetPlayerJob(source, jobData.job, 0)
     end
     
     -- Delete old positions and save new ones
@@ -344,7 +356,7 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
         if jobData.garage.pos1 then
             MySQL.insert.await('INSERT INTO hposlovi_positions (job_name, position_type, x, y, z) VALUES (?, ?, ?, ?, ?)', {
                 jobData.job, 'garage_retrieve', jobData.garage.pos1.x, jobData.garage.pos1.y, jobData.garage.pos1.z
-            })
+              })
         end
         if jobData.garage.pos2 then
             MySQL.insert.await('INSERT INTO hposlovi_positions (job_name, position_type, x, y, z, heading) VALUES (?, ?, ?, ?, ?, ?)', {
@@ -373,7 +385,6 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
     if jobData.inv then
         for idx, inv in ipairs(jobData.inv) do
             if inv.label and inv.slots and inv.peso then
-                -- Save x/y/z position directly on the inventory row
                 local invX = inv.pos and inv.pos.x or nil
                 local invY = inv.pos and inv.pos.y or nil
                 local invZ = inv.pos and inv.pos.z or nil
@@ -388,23 +399,21 @@ RegisterNetEvent('hPoslovi:server:createOrUpdateJob', function(jobData, isModify
             end
         end
     end
-
     
-    xPlayer.showNotification(isModifying and locale('job_updated_success') or locale('job_created_success'))
-    
-    -- REFRESH MARKERS ON ALL CLIENTS
+    Framework.Notify(source, isModifying and locale('job_updated_success') or locale('job_created_success'))
     TriggerClientEvent('hPoslovi:client:refreshJobs', -1)
     DebugLog('Markers refreshed on all clients')
 end)
 
 -- Delete job
 RegisterNetEvent('hPoslovi:server:deleteJob', function(jobName)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not CheckPerms(source) then return end
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
+    if not Framework.CheckPerms(source) then return end
     
-    -- Delete from ESX
-    MySQL.Async.execute('DELETE FROM jobs WHERE name = @job', { ['@job'] = jobName })
-    MySQL.Async.execute('DELETE FROM job_grades WHERE job_name = @job', { ['@job'] = jobName })
+    -- Delete from Framework
+    Framework.DeleteJob(jobName)
     
     -- Delete from hPoslovi database
     MySQL.query.await('DELETE FROM hposlovi_jobs WHERE job_name = ?', {jobName})
@@ -413,15 +422,10 @@ RegisterNetEvent('hPoslovi:server:deleteJob', function(jobName)
     MySQL.query.await('DELETE FROM hposlovi_vehicles WHERE job_name = ?', {jobName})
     MySQL.query.await('DELETE FROM hposlovi_outfits WHERE job_name = ?', {jobName})
     
-    -- Refresh jobs
-    Wait(500)
-    ESX.RefreshJobs()
-    
-    -- Clear outfit storage
     jobOutfits[jobName] = nil
     
     DebugLog('Job deleted: ' .. jobName)
-    xPlayer.showNotification(locale('job_deleted_success'))
+    Framework.Notify(source, locale('job_deleted_success'))
     TriggerClientEvent('hPoslovi:client:refreshJobs', -1)
 end)
 
@@ -430,83 +434,110 @@ end)
 -- ========================================
 
 lib.callback.register('hPoslovi:server:getAllJobs', function(source)
+    while not dbInitialized do Wait(50) end
     local jobs = MySQL.query.await('SELECT * FROM hposlovi_jobs', {})
     local jobsData = {}
     
-    for _, job in ipairs(jobs) do
-        -- Initialize with explicit null fields so json.encode produces {} objects, not [] arrays
-        local jobData = {
-            job = job.job_name,
-            label = job.job_label,
-            bossmenu = { pos = false, gradoboss = 4 },  -- false encodes as null in JSON but keeps it an object
-            garage   = { pos1 = false, pos2 = false, heading = 0.0 },
-            helipad  = { pos1 = false, pos2 = false, heading = 0.0 },
-            inv = {},
-            gradi = {}
-        }
-        
-        -- Get positions
-        local positions = MySQL.query.await('SELECT * FROM hposlovi_positions WHERE job_name = ?', {job.job_name})
-        for _, pos in ipairs(positions) do
-            if pos.position_type == 'bossmenu' then
-                jobData.bossmenu.pos = {x = pos.x, y = pos.y, z = pos.z}
-                if pos.extra_data then
-                    local extra = json.decode(pos.extra_data)
-                    jobData.bossmenu.gradoboss = extra.boss_grade or 4
+    if jobs then
+        for _, job in ipairs(jobs) do
+            local jobData = {
+                job = job.job_name,
+                label = job.job_label,
+                bossmenu = { pos = false, gradoboss = 4 },
+                garage   = { pos1 = false, pos2 = false, heading = 0.0 },
+                helipad  = { pos1 = false, pos2 = false, heading = 0.0 },
+                inv = {},
+                gradi = {}
+            }
+            
+            -- Get positions
+            local positions = MySQL.query.await('SELECT * FROM hposlovi_positions WHERE job_name = ?', {job.job_name})
+            if positions then
+                for _, pos in ipairs(positions) do
+                    if pos.position_type == 'bossmenu' then
+                        jobData.bossmenu.pos = {x = pos.x, y = pos.y, z = pos.z}
+                        if pos.extra_data then
+                            local extra = json.decode(pos.extra_data)
+                            jobData.bossmenu.gradoboss = extra.boss_grade or 4
+                        end
+                    elseif pos.position_type == 'wardrobe' then
+                        jobData.camerino = {x = pos.x, y = pos.y, z = pos.z}
+                    elseif pos.position_type == 'garage_retrieve' then
+                        jobData.garage.pos1 = {x = pos.x, y = pos.y, z = pos.z}
+                    elseif pos.position_type == 'garage_spawn' then
+                        jobData.garage.pos2 = {x = pos.x, y = pos.y, z = pos.z}
+                        jobData.garage.heading = pos.heading or 0.0
+                    elseif pos.position_type == 'helipad_retrieve' then
+                        jobData.helipad.pos1 = {x = pos.x, y = pos.y, z = pos.z}
+                    elseif pos.position_type == 'helipad_spawn' then
+                        jobData.helipad.pos2 = {x = pos.x, y = pos.y, z = pos.z}
+                        jobData.helipad.heading = pos.heading or 0.0
+                    elseif pos.position_type == 'inventory' and pos.extra_data then
+                        local extra = json.decode(pos.extra_data)
+                        local invIdx = tonumber(pos.position_id) or #jobData.inv + 1
+                        if not jobData.inv[invIdx] then
+                            jobData.inv[invIdx] = {}
+                        end
+                        jobData.inv[invIdx].pos = {x = pos.x, y = pos.y, z = pos.z}
+                    end
                 end
-            elseif pos.position_type == 'wardrobe' then
-                jobData.camerino = {x = pos.x, y = pos.y, z = pos.z}
-            elseif pos.position_type == 'garage_retrieve' then
-                jobData.garage.pos1 = {x = pos.x, y = pos.y, z = pos.z}
-            elseif pos.position_type == 'garage_spawn' then
-                jobData.garage.pos2 = {x = pos.x, y = pos.y, z = pos.z}
-                jobData.garage.heading = pos.heading or 0.0
-            elseif pos.position_type == 'helipad_retrieve' then
-                jobData.helipad.pos1 = {x = pos.x, y = pos.y, z = pos.z}
-            elseif pos.position_type == 'helipad_spawn' then
-                jobData.helipad.pos2 = {x = pos.x, y = pos.y, z = pos.z}
-                jobData.helipad.heading = pos.heading or 0.0
-            elseif pos.position_type == 'inventory' and pos.extra_data then
-                local extra = json.decode(pos.extra_data)
-                local invIdx = tonumber(pos.position_id) or #jobData.inv + 1
-                if not jobData.inv[invIdx] then
-                    jobData.inv[invIdx] = {}
+            end
+            
+            -- Get inventories
+            local inventories = MySQL.query.await('SELECT * FROM hposlovi_inventories WHERE job_name = ?', {job.job_name})
+            if inventories then
+                for _, inv in ipairs(inventories) do
+                    local invIdx = tonumber(inv.inventory_id) or #jobData.inv + 1
+                    if not jobData.inv[invIdx] then
+                        jobData.inv[invIdx] = {}
+                    end
+                    jobData.inv[invIdx].label = inv.label
+                    jobData.inv[invIdx].nomedeposito = inv.label
+                    jobData.inv[invIdx].slots = inv.slots
+                    jobData.inv[invIdx].peso = inv.max_weight
+                    jobData.inv[invIdx].grado = inv.min_grade
+                    if inv.x and inv.y and inv.z then
+                        jobData.inv[invIdx].pos = {x = inv.x, y = inv.y, z = inv.z}
+                    end
                 end
-                jobData.inv[invIdx].pos = {x = pos.x, y = pos.y, z = pos.z}
             end
-        end
-        
-        -- Get inventories (position stored directly as x/y/z on the inventory row)
-        local inventories = MySQL.query.await('SELECT * FROM hposlovi_inventories WHERE job_name = ?', {job.job_name})
-        for _, inv in ipairs(inventories) do
-            local invIdx = tonumber(inv.inventory_id) or #jobData.inv + 1
-            if not jobData.inv[invIdx] then
-                jobData.inv[invIdx] = {}
-            end
-            jobData.inv[invIdx].label = inv.label
-            jobData.inv[invIdx].nomedeposito = inv.label
-            jobData.inv[invIdx].slots = inv.slots
-            jobData.inv[invIdx].peso = inv.max_weight
-            jobData.inv[invIdx].grado = inv.min_grade
-            -- Read position directly from inventory row
-            if inv.x and inv.y and inv.z then
-                jobData.inv[invIdx].pos = {x = inv.x, y = inv.y, z = inv.z}
-            end
-        end
 
-        
-        -- Get grades from ESX
-        local grades = MySQL.query.await('SELECT * FROM job_grades WHERE job_name = ? ORDER BY grade ASC', {job.job_name})
-        for _, grade in ipairs(grades) do
-            table.insert(jobData.gradi, {
-                grade = grade.grade,
-                name = grade.name,
-                label = grade.label,
-                salary = grade.salary
-            })
+            -- Get grades configurations dynamically based on framework type
+            if Framework.Type == 'esx' then
+                local grades = MySQL.query.await('SELECT * FROM job_grades WHERE job_name = ? ORDER BY grade ASC', {job.job_name})
+                if grades then
+                    for _, grade in ipairs(grades) do
+                        table.insert(jobData.gradi, {
+                            grade = grade.grade,
+                            name = grade.name,
+                            label = grade.label,
+                            salary = grade.salary
+                        })
+                    end
+                end
+            else -- QB/QBox grades read from JSON column
+                if job.job_grades and job.job_grades ~= "" then
+                    local grades = json.decode(job.job_grades)
+                    if grades then
+                        for _, grade in ipairs(grades) do
+                            table.insert(jobData.gradi, {
+                                grade = grade.grade,
+                                name = grade.name,
+                                label = grade.label,
+                                salary = grade.salary
+                            })
+                        end
+                    end
+                end
+            end
+            
+            -- Fallback if grades list is empty
+            if #jobData.gradi == 0 then
+                jobData.gradi = Config.IfNotGrades
+            end
+
+            table.insert(jobsData, jobData)
         end
-        
-        table.insert(jobsData, jobData)
     end
     
     return jobsData
@@ -517,14 +548,17 @@ end)
 -- ========================================
 
 lib.callback.register('hPoslovi:server:getJobVehicles', function(source, jobName, vehicleType)
+    while not dbInitialized do Wait(50) end
     vehicleType = vehicleType or 'car'
     local vehicles = MySQL.query.await('SELECT * FROM hposlovi_vehicles WHERE job_name = ? AND vehicle_type = ?', {jobName, vehicleType})
     return vehicles or {}
 end)
 
 RegisterNetEvent('hPoslovi:server:addVehicle', function(jobName, vehicleData)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not CheckPerms(source) then return end
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
+    if not Framework.CheckPerms(source) then return end
     
     local result = MySQL.insert.await('INSERT INTO hposlovi_vehicles (job_name, label, model, color_r, color_g, color_b, plate, fullkit, min_grade, vehicle_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', {
         jobName,
@@ -541,57 +575,42 @@ RegisterNetEvent('hPoslovi:server:addVehicle', function(jobName, vehicleData)
     
     if result then
         DebugLog('Vehicle added: ' .. vehicleData.label .. ' for ' .. jobName)
-        xPlayer.showNotification(locale('vehaddedsuccessfully'))
+        Framework.Notify(source, locale('vehaddedsuccessfully'))
         TriggerClientEvent('hPoslovi:client:refreshVehicles', -1, jobName)
     else
-        xPlayer.showNotification(locale('failed_add_veh'))
+        Framework.Notify(source, locale('failed_add_veh'))
     end
 end)
 
 RegisterNetEvent('hPoslovi:server:deleteVehicle', function(vehicleId, jobName)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not CheckPerms(source) then return end
+    while not dbInitialized do Wait(50) end
+    local source = source
+    local xPlayer = Framework.GetPlayer(source)
+    if not Framework.CheckPerms(source) then return end
     
     local result = MySQL.query.await('DELETE FROM hposlovi_vehicles WHERE id = ?', {vehicleId})
     
     if result then
         DebugLog('Vehicle deleted: ID ' .. vehicleId)
-        xPlayer.showNotification(locale('veh_deleted_success'))
+        Framework.Notify(source, locale('veh_deleted_success'))
         TriggerClientEvent('hPoslovi:client:refreshVehicles', -1, jobName)
     else
-        xPlayer.showNotification(locale('failed_delete_veh'))
+        Framework.Notify(source, locale('failed_delete_veh'))
     end
 end)
-
--- ========================================
--- HELPER FUNCTIONS
--- ========================================
-
-CheckPerms = function(source)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    for k,v in pairs(Config.AdminGroups) do 
-        if v == xPlayer.getGroup() then 
-            return true
-        end
-    end
-    xPlayer.showNotification(locale('noperms'))
-    return false
-end
 
 -- ========================================
 -- COMMANDS
 -- ========================================
 
 RegisterCommand(Config.EditCommand, function(source)
-    if CheckPerms(source) then
+    if Framework.CheckPerms(source) then
         TriggerClientEvent("hPoslovi:client:openEditMenu", source)
     end
 end)
 
 RegisterCommand(Config.CreateCommand, function(source)
-    if CheckPerms(source) then
+    if Framework.CheckPerms(source) then
         TriggerClientEvent("hPoslovi:client:openCreateMenu", source)
     end
 end)
-
-

@@ -54,34 +54,3 @@ Config.AdminGroups = {
     'developer'
 }
 
--- ===========================================
--- FUNCTIONS
--- ===========================================
-
--- Boss Menu Function (esx_society only)
-YourBossmenuFunc = function(job)
-    TriggerEvent('esx_society:openBossMenu', job, function(data, menu)
-        menu.close()
-    end, {
-        wash = false
-    })
-end
-
--- Text UI Function
-FunzioneTextUI = function(msg)
-    lib.showTextUI('[E] - '..msg, {
-        position = 'right-center',
-        icon = 'circle',
-        style = {
-            borderRadius = 10,
-            backgroundColor = 'rgba(0, 0, 0, 0.5)',
-            color = '#ffffff',
-        },
-    })
-end
-
--- Notification Function
-Notify = function(msg)
-    ESX.ShowNotification(msg)
-end
-

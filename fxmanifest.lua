@@ -2,22 +2,23 @@ fx_version 'cerulean'
 game 'gta5'
 description 'Premium Glassmorphic Job & Faction Manager'
 author 'chyaro group'
-version '2.1.0'
+version '3.0.0'
 
 client_scripts {
+    'client/framework.lua',
     'client/marker.lua',
     'client/main.lua'
 }
 
 shared_scripts {
     'config/*.*',
-    '@ox_lib/init.lua',
-    '@es_extended/imports.lua'
+    '@ox_lib/init.lua'
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
-    'server/*.lua'
+    'server/framework.lua',
+    'server/main.lua'
 }
 
 ui_page 'html/index.html'

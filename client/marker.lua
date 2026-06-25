@@ -11,8 +11,6 @@ local Keys = {
 }
 
 local zoneRegistered = {}
-CurrentJob = nil
-CurrentJob2 = nil  -- Initialize to prevent nil value errors
 
 local CurrenPlayerData = {
     job = {
@@ -43,33 +41,6 @@ local DrawText3D = function (x, y, z, text)
     ClearDrawOrigin()
 end
 
-FrameWork = exports["es_extended"]:getSharedObject()
-
-RegisterNetEvent('esx:playerLoaded')
-AddEventHandler('esx:playerLoaded', function(xPlayer)
-    CurrenPlayerData.job = xPlayer.job
-    if xPlayer.job then
-        CurrenPlayerData.job = xPlayer.job
-    end
-end)
-
-CreateThread(function ()
-    while not ESX.IsPlayerLoaded() do
-        Wait(10)
-    end
-    CurrentJob = ESX.GetPlayerData().job
-    CurrentJob2 = ESX.GetPlayerData().job2 or {name = "unemployed", grade = 0}  -- Add fallback
-end)
-
-RegisterNetEvent("esx:setJob")
-AddEventHandler("esx:setJob", function (job)
-    CurrentJob = job
-end)
-
-RegisterNetEvent("esx:setJob2")
-AddEventHandler("esx:setJob2", function (job)
-    CurrentJob2 = job
-end)
 
 -- FIXED: Changed grade check from == to >=
 local function HasJob(data)
@@ -182,7 +153,7 @@ local registerMarker = function (data)
         if self.msg ~= "" then
             if self.currentDistance <= self.interactDistance then
                 if not self.textuiOpened then
-                    FunzioneTextUI(self.msg)
+                    Framework.ShowTextUI(self.msg)
                     self.textuiOpened = true
                 end
             else
@@ -208,7 +179,12 @@ local registerMarker = function (data)
         end
         if self.currentDistance <= self.interactDistance and IsControlJustReleased(0, 38) then
             if self.action then
+                print("[cJobCreator DEBUG] Pressed E on marker: " .. tostring(self.name))
                 local status, err = pcall(self.action)
+                if not status then
+                    print("[cJobCreator ERROR] Marker action failed: " .. tostring(err))
+                    Framework.Notify("Error: " .. tostring(err))
+                end
             end
         end
     end

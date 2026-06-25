@@ -8,8 +8,19 @@ local function DebugLog(message)
 end
 
 local old = nil
-local datafaz = {} -- Defined locally to avoid global scope issues
-local isModifying = false -- Track if we're modifying an existing job
+local datafaz = {} 
+local isModifying = false 
+local AllJobsData = nil
+
+exports('HasBossMenu', function(jobName)
+    if not AllJobsData then return false end
+    for _, v in pairs(AllJobsData) do
+        if v.job == jobName and v.bossmenu and v.bossmenu.pos then
+            return true
+        end
+    end
+    return false
+end)
 
 -- HELPER: Hex to RGB Converter
 local function HexToRGB(hex)
@@ -40,12 +51,12 @@ local function GetLocalesTable()
 end
 
 -- WARDROBE FUNCTION - REDESIGNED WITH ILLENIUM APPEARANCE & NUI
-YourWardRobeFunc = function(job)
-    local PlayerData = ESX.GetPlayerData()
+function OpenWardrobe(job)
+    local jobName, jobGrade = Framework.GetPlayerJob()
     
     -- Get boss grade for this job from database via callback
     lib.callback('hPoslovi:server:getBossGrade', false, function(bossGrade)
-        local canManageOutfits = bossGrade and PlayerData.job.grade >= bossGrade
+        local canManageOutfits = bossGrade and jobGrade >= bossGrade
         
         -- Get outfits
         lib.callback('hPoslovi:server:getJobOutfits', false, function(outfits)
@@ -63,7 +74,7 @@ YourWardRobeFunc = function(job)
 end
 
 -- GARAGE FUNCTION (Player Usage) - NUI VERSION
-function ApriGarage(data, job)
+function OpenGarage(data, job)
     local jobData = nil
     for k,v in pairs(data) do
         if v.job == job then 
@@ -73,24 +84,24 @@ function ApriGarage(data, job)
     end
 
     if not jobData then 
-        Notify(locale('job_data_not_found'))
+        Framework.Notify(locale('job_data_not_found'))
         return 
     end
 
     -- Ensure garage structure exists
     if not jobData.garage then
-        Notify(locale('garage_not_configured'))
+        Framework.Notify(locale('garage_not_configured'))
         return
     end
 
     -- Load car vehicles from database (car type only)
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local PlayerData = ESX.GetPlayerData()
+        local jobName, jobGrade = Framework.GetPlayerJob()
         local availableVehicles = {}
         
         if vehicles and #vehicles > 0 then
             for idx, vehicle in ipairs(vehicles) do
-                if PlayerData.job.grade >= (tonumber(vehicle.min_grade) or 0) then
+                if jobGrade >= (tonumber(vehicle.min_grade) or 0) then
                     table.insert(availableVehicles, vehicle)
                 end
             end
@@ -109,21 +120,21 @@ end
 
 -- SPAWN VEHICLE FUNCTION - DATABASE VERSION
 function SpawnJobVehicle(vehicleData, garageData)
-    local PlayerData = ESX.GetPlayerData()
+    local jobName, jobGrade = Framework.GetPlayerJob()
     
     -- Support both old format (args) and new database format
     local args = vehicleData.args or vehicleData
     local gradoJob = tonumber(args.grado or args.min_grade) or 0
     
     -- Grade Check
-    if PlayerData.job.grade < gradoJob then
-        Notify(locale('gradobasso'))
+    if jobGrade < gradoJob then
+        Framework.Notify(locale('gradobasso'))
         return
     end
 
     -- Validate spawn point
     if not garageData.pos2 then 
-        Notify(locale('garage_spawn_not_set')) 
+        Framework.Notify(locale('garage_spawn_not_set')) 
         return 
     end
 
@@ -131,8 +142,8 @@ function SpawnJobVehicle(vehicleData, garageData)
     local heading = garageData.heading or 0.0
 
     -- Check if spawn point is clear
-    if not ESX.Game.IsSpawnPointClear(spawnCoords, 3.0) then
-        Notify(locale('placeoccupat'))
+    if not Framework.IsSpawnPointClear(spawnCoords, 3.0) then
+        Framework.Notify(locale('placeoccupat'))
         return
     end
 
@@ -141,12 +152,12 @@ function SpawnJobVehicle(vehicleData, garageData)
     local modelHash = type(model) == 'string' and joaat(model) or model
     
     if not IsModelInCdimage(modelHash) then 
-        Notify(locale('invalid_model_msg', tostring(model))) 
+        Framework.Notify(locale('invalid_model_msg', tostring(model))) 
         return 
     end
 
     if not IsModelAVehicle(modelHash) then
-        Notify(locale('model_not_vehicle', tostring(model)))
+        Framework.Notify(locale('model_not_vehicle', tostring(model)))
         return
     end
 
@@ -159,7 +170,7 @@ function SpawnJobVehicle(vehicleData, garageData)
     end
 
     if not HasModelLoaded(modelHash) then
-        Notify(locale('failed_load_veh'))
+        Framework.Notify(locale('failed_load_veh'))
         return
     end
 
@@ -167,7 +178,7 @@ function SpawnJobVehicle(vehicleData, garageData)
     local vehicle = CreateVehicle(modelHash, spawnCoords.x, spawnCoords.y, spawnCoords.z, heading, true, false)
     
     if not DoesEntityExist(vehicle) then
-        Notify(locale('failed_create_veh'))
+        Framework.Notify(locale('failed_create_veh'))
         SetModelAsNoLongerNeeded(modelHash)
         return
     end
@@ -186,15 +197,19 @@ function SpawnJobVehicle(vehicleData, garageData)
     SetVehRadioStation(vehicle, 'OFF')
     
     -- Handle Color (Supports database format color_r/g/b and old colore format)
+    local r, g, b = nil, nil, nil
     if vehicleData.color_r and vehicleData.color_g and vehicleData.color_b then
-        -- Database format
-        SetVehicleCustomPrimaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
-        SetVehicleCustomSecondaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
-    elseif args.colore then
-        -- Old format
-        local r = args.colore.r or args.colore.x or 255
-        local g = args.colore.g or args.colore.y or 255
-        local b = args.colore.b or args.colore.z or 255
+        r = tonumber(vehicleData.color_r)
+        g = tonumber(vehicleData.color_g)
+        b = tonumber(vehicleData.color_b)
+    elseif args and args.colore then
+        r = tonumber(args.colore.r or args.colore.x)
+        g = tonumber(args.colore.g or args.colore.y)
+        b = tonumber(args.colore.b or args.colore.z)
+    end
+
+    if r and g and b then
+        SetVehicleColours(vehicle, 0, 0)
         SetVehicleCustomPrimaryColour(vehicle, r, g, b)
         SetVehicleCustomSecondaryColour(vehicle, r, g, b)
     end
@@ -222,11 +237,12 @@ function SpawnJobVehicle(vehicleData, garageData)
 
     -- Put player in vehicle
     TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
-    Notify(locale('vehspawned'))
+    Framework.GiveVehicleKeys(vehicle)
+    Framework.Notify(locale('vehspawned'))
 end
 
 -- HELIPAD GARAGE FUNCTION (Player Usage) - NUI VERSION
-function ApriHelipad(data, job)
+function OpenHelipad(data, job)
     local jobData = nil
     for k,v in pairs(data) do
         if v.job == job then 
@@ -236,24 +252,24 @@ function ApriHelipad(data, job)
     end
 
     if not jobData then 
-        Notify(locale('job_data_not_found'))
+        Framework.Notify(locale('job_data_not_found'))
         return 
     end
 
     -- Ensure helipad structure exists
     if not jobData.helipad then
-        Notify(locale('helipad_not_configured'))
+        Framework.Notify(locale('helipad_not_configured'))
         return
     end
 
     -- Load helicopter vehicles from database (heli type only)
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local PlayerData = ESX.GetPlayerData()
+        local jobName, jobGrade = Framework.GetPlayerJob()
         local availableVehicles = {}
         
         if vehicles and #vehicles > 0 then
             for idx, vehicle in ipairs(vehicles) do
-                if PlayerData.job.grade >= (tonumber(vehicle.min_grade) or 0) then
+                if jobGrade >= (tonumber(vehicle.min_grade) or 0) then
                     table.insert(availableVehicles, vehicle)
                 end
             end
@@ -272,20 +288,20 @@ end
 
 -- SPAWN HELICOPTER FUNCTION
 function SpawnJobHelicopter(vehicleData, helipadData)
-    local PlayerData = ESX.GetPlayerData()
+    local jobName, jobGrade = Framework.GetPlayerJob()
     
     local args = vehicleData.args or vehicleData
     local gradoJob = tonumber(args.grado or args.min_grade) or 0
     
     -- Grade Check
-    if PlayerData.job.grade < gradoJob then
-        Notify(locale('gradobasso'))
+    if jobGrade < gradoJob then
+        Framework.Notify(locale('gradobasso'))
         return
     end
 
     -- Validate spawn point
     if not helipadData.pos2 then 
-        Notify(locale('helipad_spawn_not_set')) 
+        Framework.Notify(locale('helipad_spawn_not_set')) 
         return 
     end
 
@@ -297,12 +313,12 @@ function SpawnJobHelicopter(vehicleData, helipadData)
     local modelHash = type(model) == 'string' and joaat(model) or model
     
     if not IsModelInCdimage(modelHash) then 
-        Notify(locale('invalid_model_msg', tostring(model))) 
+        Framework.Notify(locale('invalid_model_msg', tostring(model))) 
         return 
     end
 
     if not IsModelAVehicle(modelHash) then
-        Notify(locale('model_not_vehicle', tostring(model)))
+        Framework.Notify(locale('model_not_vehicle', tostring(model)))
         return
     end
 
@@ -315,7 +331,7 @@ function SpawnJobHelicopter(vehicleData, helipadData)
     end
 
     if not HasModelLoaded(modelHash) then
-        Notify(locale('failed_load_veh'))
+        Framework.Notify(locale('failed_load_veh'))
         return
     end
 
@@ -323,7 +339,7 @@ function SpawnJobHelicopter(vehicleData, helipadData)
     local vehicle = CreateVehicle(modelHash, spawnCoords.x, spawnCoords.y, spawnCoords.z, heading, true, false)
     
     if not DoesEntityExist(vehicle) then
-        Notify(locale('failed_create_veh'))
+        Framework.Notify(locale('failed_create_veh'))
         SetModelAsNoLongerNeeded(modelHash)
         return
     end
@@ -341,13 +357,19 @@ function SpawnJobHelicopter(vehicleData, helipadData)
     SetVehRadioStation(vehicle, 'OFF')
     
     -- Handle Color
+    local r, g, b = nil, nil, nil
     if vehicleData.color_r and vehicleData.color_g and vehicleData.color_b then
-        SetVehicleCustomPrimaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
-        SetVehicleCustomSecondaryColour(vehicle, vehicleData.color_r, vehicleData.color_g, vehicleData.color_b)
-    elseif args.colore then
-        local r = args.colore.r or args.colore.x or 255
-        local g = args.colore.g or args.colore.y or 255
-        local b = args.colore.b or args.colore.z or 255
+        r = tonumber(vehicleData.color_r)
+        g = tonumber(vehicleData.color_g)
+        b = tonumber(vehicleData.color_b)
+    elseif args and args.colore then
+        r = tonumber(args.colore.r or args.colore.x)
+        g = tonumber(args.colore.g or args.colore.y)
+        b = tonumber(args.colore.b or args.colore.z)
+    end
+
+    if r and g and b then
+        SetVehicleColours(vehicle, 0, 0)
         SetVehicleCustomPrimaryColour(vehicle, r, g, b)
         SetVehicleCustomSecondaryColour(vehicle, r, g, b)
     end
@@ -372,12 +394,11 @@ function SpawnJobHelicopter(vehicleData, helipadData)
 
     SetModelAsNoLongerNeeded(modelHash)
     TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
-    Notify(locale('vehspawned'))
+    Framework.GiveVehicleKeys(vehicle)
+    Framework.Notify(locale('vehspawned'))
 end
 
-
-
-function ApriMenu(label, job, modifica, selezionata)
+function OpenMenu(label, job, modifica, selezionata)
     isModifying = modifica
     
     if modifica then 
@@ -501,21 +522,41 @@ end)
 
 RegisterNUICallback('editSelectedJob', function(data, cb)
     if data and data.job then
-        ApriMenu("", data.job, true, nil)
+        OpenMenu("", data.job, true, nil)
     end
     cb('ok')
 end)
 
 RegisterNUICallback('spawnVehicle', function(data, cb)
-    if data and data.vehicle and data.garage then
-        SpawnJobVehicle(data.vehicle, data.garage)
+    if data and data.vehicle then
+        local jobName, _ = Framework.GetPlayerJob()
+        local garageData = data.garage
+        if (not garageData or not garageData.pos2) and AllJobsData then
+            for _, v in pairs(AllJobsData) do
+                if v.job == jobName then
+                    garageData = v.garage
+                    break
+                end
+            end
+        end
+        SpawnJobVehicle(data.vehicle, garageData)
     end
     cb('ok')
 end)
 
 RegisterNUICallback('spawnHelicopter', function(data, cb)
-    if data and data.vehicle and data.helipad then
-        SpawnJobHelicopter(data.vehicle, data.helipad)
+    if data and data.vehicle then
+        local jobName, _ = Framework.GetPlayerJob()
+        local helipadData = data.helipad
+        if (not helipadData or not helipadData.pos2) and AllJobsData then
+            for _, v in pairs(AllJobsData) do
+                if v.job == jobName then
+                    helipadData = v.helipad
+                    break
+                end
+            end
+        end
+        SpawnJobHelicopter(data.vehicle, helipadData)
     end
     cb('ok')
 end)
@@ -524,17 +565,18 @@ RegisterNUICallback('wardrobeAction', function(data, cb)
     if not data then cb('ok') return end
 
     if data.action == 'openPedMenu' then
-        TriggerEvent("illenium-appearance:client:openClothingShop", true)    elseif data.action == 'saveOutfit' then
+        TriggerEvent("illenium-appearance:client:openClothingShop", true)
+    elseif data.action == 'saveOutfit' then
         local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
         if appearance then
             TriggerServerEvent('hPoslovi:server:saveJobOutfit', data.job, data.outfitName, appearance)
         else
-            Notify(locale('failed_appearance'))
+            Framework.Notify(locale('failed_appearance'))
         end
     elseif data.action == 'wearOutfit' then
         if data.outfitData then
             exports['illenium-appearance']:setPlayerAppearance(data.outfitData)
-            Notify(locale('outfit_applied', data.outfitName))
+            Framework.Notify(locale('outfit_applied', data.outfitName))
         end
     elseif data.action == 'deleteOutfit' then
         TriggerServerEvent('hPoslovi:server:deleteJobOutfit', data.job, data.outfitName)
@@ -546,7 +588,7 @@ end)
 RegisterNetEvent('hPoslovi:client:openEditMenu', function()
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
         if not data or #data == 0 then
-            Notify(locale('no_jobs_found'))
+            Framework.Notify(locale('no_jobs_found'))
             return
         end
         
@@ -569,24 +611,20 @@ end)
 
 RegisterNetEvent('hPoslovi:client:refreshJobs', function()
     DebugLog('Refreshing markers from database...')
-    -- Wait for esx:setJob to arrive before refreshing markers.
-    -- The server fires setJob and refreshJobs back-to-back, so setJob
-    -- may not have updated CurrentJob yet when we get here.
     Wait(500)
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
         if data then
-            CreaMark(data)
+            CreateMarkers(data)
         end
     end)
 end)
-
 
 CreateThread(function()
     Wait(2000) -- Wait for server to load
     DebugLog('Loading markers from database...')
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
         if data then
-            CreaMark(data)
+            CreateMarkers(data)
         else
             DebugLog('No jobs found in database')
         end
@@ -596,11 +634,12 @@ end)
 -- Track registered inventory marker names per job so we can clean them up on refresh
 local registeredInvMarkers = {}
 
-function CreaMark(data)
+function CreateMarkers(data)
     if not data then 
-        DebugLog('ERROR: CreaMark called with nil data')
+        DebugLog('ERROR: CreateMarkers called with nil data')
         return 
     end
+    AllJobsData = data
     
     DebugLog('Creating markers for ' .. #data .. ' jobs')
     
@@ -616,7 +655,6 @@ function CreaMark(data)
         TriggerEvent('ox_gridsystem:unregisterMarker', 'helipad2'..v.job)
 
         -- Unregister ALL previously registered inventory markers for this job
-        -- This ensures stale markers from previous configs are fully removed
         if registeredInvMarkers[v.job] then
             for _, invName in ipairs(registeredInvMarkers[v.job]) do
                 TriggerEvent('ox_gridsystem:unregisterMarker', invName)
@@ -633,8 +671,6 @@ function CreaMark(data)
             end
         end
 
-        -- Wait longer to ensure ox_lib fully removes all old points before creating new ones.
-        -- Near walls the distance calculation can spike, so we need the old point fully gone.
         Wait(250)
 
         -- Register New
@@ -655,7 +691,7 @@ function CreaMark(data)
                 texture = Config.BossMenuMarker,  
                 textureDict = Config.MarkerYTD,
                 action = function()
-                    YourBossmenuFunc(v.job)
+                    Framework.OpenBossMenu(v.job)
                 end
             })
         end
@@ -664,7 +700,6 @@ function CreaMark(data)
             registeredInvMarkers[v.job] = registeredInvMarkers[v.job] or {}
             for a,b in pairs(v.inv) do
                 if a and b.pos then
-                    -- Include job name in marker name to prevent conflicts between jobs
                     local markerName = 'inv_'..v.job..'_'..a
                     table.insert(registeredInvMarkers[v.job], markerName)
                     DebugLog('Registering inventory marker ' .. tostring(a) .. ' for ' .. v.job)
@@ -674,8 +709,6 @@ function CreaMark(data)
                         size = Config.MarkerSize,
                         scale = Config.MarkerSize,
                         type = Config.MarkerType,
-                        -- Use a larger draw distance so the marker stays visible even when
-                        -- the distance calculation spikes due to nearby walls/geometry
                         drawDistance = math.max(Config.MarkerDrawDistance, 8),
                         interactDistance = Config.InteractDistance,
                         color = Config.MarkerColor,
@@ -709,7 +742,7 @@ function CreaMark(data)
                 texture = Config.WardRobeMarker,  
                 textureDict = Config.MarkerYTD,
                 action = function()
-                    YourWardRobeFunc(v.job)
+                    OpenWardrobe(v.job)
                 end
             })
         end
@@ -731,7 +764,7 @@ function CreaMark(data)
                 texture = Config.Vehicle1Marker,  
                 textureDict = Config.MarkerYTD,
                 action = function()
-                    ApriGarage(data, v.job)
+                    OpenGarage(data, v.job)
                 end,
                 onExit = function()
                     SetNuiFocus(false, false)
@@ -756,10 +789,10 @@ function CreaMark(data)
                     textureDict = Config.MarkerYTD,
                     action = function()
                         if IsPedInAnyVehicle(PlayerPedId()) then
-                            ESX.Game.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
-                            Notify(locale('vehdeposited'))
+                            Framework.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
+                            Framework.Notify(locale('vehdeposited'))
                         else
-                            Notify(locale('notveh'))
+                            Framework.Notify(locale('notveh'))
                         end
                     end,
                     onExit = function()
@@ -788,7 +821,7 @@ function CreaMark(data)
                 texture = Config.Helipad1Marker,
                 textureDict = Config.MarkerYTD,
                 action = function()
-                    ApriHelipad(data, v.job)
+                    OpenHelipad(data, v.job)
                 end,
                 onExit = function()
                     SetNuiFocus(false, false)
@@ -813,10 +846,10 @@ function CreaMark(data)
                     textureDict = Config.MarkerYTD,
                     action = function()
                         if IsPedInAnyVehicle(PlayerPedId()) then
-                            ESX.Game.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
-                            Notify(locale('vehdeposited'))
+                            Framework.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
+                            Framework.Notify(locale('vehdeposited'))
                         else
-                            Notify(locale('notveh'))
+                            Framework.Notify(locale('notveh'))
                         end
                     end,
                     onExit = function()
@@ -830,22 +863,20 @@ function CreaMark(data)
     
     DebugLog('Marker creation complete')
 end
+
 -- Refresh vehicle list when updated
 RegisterNetEvent('hPoslovi:client:refreshVehicles', function(jobName)
-    -- If the menu is open for this job, refresh it
     if datafaz and datafaz.job == jobName then
         Wait(100)
-        -- Menu will auto-refresh when reopened
     end
 end)
 
 -- BAZA COMMAND - set GPS waypoint to Vehicle Get (garage_retrieve) position
 RegisterCommand(Config.BaseCommand, function()
-    local PlayerData = ESX.GetPlayerData()
-    local jobName = PlayerData and PlayerData.job and PlayerData.job.name
+    local jobName, jobGrade = Framework.GetPlayerJob()
 
     if not jobName or jobName == 'unemployed' then
-        Notify(locale('noperms'))
+        Framework.Notify(locale('noperms'))
         return
     end
 
@@ -853,7 +884,7 @@ RegisterCommand(Config.BaseCommand, function()
         if pos and pos.x and pos.y then
             SetNewWaypoint(pos.x, pos.y)
         else
-            Notify(locale('garage_not_configured'))
+            Framework.Notify(locale('garage_not_configured'))
         end
     end, jobName)
 end, false)
