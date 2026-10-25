@@ -1,7 +1,5 @@
-let activeMode = 'creator'; // 'creator', 'garage', 'helipad', 'wardrobe'
 let locales = {};
 let isModifying = false;
-let currentJobName = '';
 let activeTab = 'general';
 
 // In-memory job creator state
@@ -109,7 +107,6 @@ const ICONS = {
     'car': ['M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0', 'M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0', 'M5 17h-2v-6l2 -5h9l4 5h1a2 2 0 0 1 2 2v4h-2m-4 0h-6m-6 -6h15m-6 0v-5'],
     'helicopter': ['M3 10l1 2h6', 'M12 9a2 2 0 0 0 -2 2v3c0 1.1 .9 2 2 2h7a2 2 0 0 0 2 -2c0 -3.31 -3.13 -5 -7 -5h-2z', 'M13 9l0 -3', 'M5 6l15 0', 'M15 9.1v3.9h5.5', 'M15 19l0 -3', 'M19 19l-8 0'],
     'list-numbers': ['M11 6h9', 'M11 12h9', 'M12 18h8', 'M4 16a2 2 0 1 1 4 0c0 .591 -.5 1 -1 1.5l-3 2.5h4', 'M6 10v-6l-2 2'],
-    'shirt': ['M15 4l6 2v5h-3v8a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1v-8h-3v-5l6 -2a3 3 0 0 0 6 0'],
     'menu': ['M4 6l16 0', 'M4 12l16 0', 'M4 18l16 0'],
     'x': ['M18 6l-12 12', 'M6 6l12 12'],
     'plus': ['M12 5l0 14', 'M5 12l14 0'],
@@ -117,12 +114,9 @@ const ICONS = {
     'pencil': ['M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4', 'M13.5 6.5l4 4'],
     'copy': ['M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z', 'M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1'],
     'grip': ['M8 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0', 'M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0', 'M8 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0', 'M14 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0', 'M14 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0', 'M14 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0'],
-    'chevron-right': ['M9 6l6 6l-6 6'],
-    'search': ['M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0', 'M21 21l-6 -6'],
     'circle-check': ['M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0', 'M9 12l2 2l4 -4'],
     'circle-x': ['M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0', 'M10 10l4 4m0 -4l-4 4'],
-    'info-circle': ['M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0', 'M12 9h.01', 'M11 12h1v4h1'],
-    'briefcase': ['M3 9a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z', 'M8 7v-2a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v2', 'M12 12l0 .01', 'M3 13a20 20 0 0 0 18 0']
+    'info-circle': ['M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0', 'M12 9h.01', 'M11 12h1v4h1']
 };
 
 function icon(name, size = 20) {
@@ -500,9 +494,8 @@ function trapModalFocus(e) {
 // SHELL
 // ==========================================
 
-function showUI(modalOnly) {
-    $('#ui').toggleClass('modal-only', !!modalOnly).removeAttr('hidden');
-    $('#app').attr('hidden', !!modalOnly);
+function showUI() {
+    $('#ui').removeAttr('hidden');
 }
 
 function hideUI() {
@@ -525,17 +518,6 @@ function openDrawer() {
 
 function closeDrawer() {
     $('#app').removeClass('drawer-open');
-}
-
-function setMode(mode) {
-    activeMode = mode;
-    const picker = mode !== 'creator';
-    $('#app').toggleClass('is-picker', picker);
-    $('.view').removeClass('active');
-    $('.page-actions-mode').each(function () {
-        $(this).attr('hidden', $(this).data('for') !== mode);
-    });
-    $('.page-header').toggleClass('no-actions', mode === 'garage' || mode === 'helipad');
 }
 
 function setPage(title, subtitle) {
@@ -723,7 +705,6 @@ function normalisePad(raw) {
 }
 
 function setupCreatorMode(existingJobData) {
-    setMode('creator');
 
     if (isModifying && existingJobData) {
         // Lua encodes an empty table as [], so drop array-shaped or position-less values
@@ -746,7 +727,7 @@ function setupCreatorMode(existingJobData) {
         };
     } else {
         datafaz = emptyJob();
-        datafaz.job = currentJobName || (existingJobData && existingJobData.job) || '';
+        datafaz.job = (existingJobData && existingJobData.job) || '';
         datafaz.label = existingJobData ? (existingJobData.label || '') : '';
     }
 
@@ -1168,226 +1149,6 @@ function confirmDeleteJob() {
 }
 
 // ==========================================
-// JOB PICKER AND CREATE PROMPT
-// ==========================================
-
-function openJobList(jobs) {
-    setMode('creator');
-    const showSearch = jobs.length > 10;
-
-    const rows = jobs.map((job) => `
-        <button type="button" class="row is-clickable" data-select-job="${esc(job.job)}" data-search="${esc(`${job.label} ${job.job}`.toLowerCase())}">
-            <div class="row-main">
-                <span class="row-title">${esc(job.label)}</span>
-                <div class="row-meta"><span class="mono">${esc(job.job)}</span></div>
-            </div>
-            ${icon('chevron-right')}
-        </button>
-    `).join('');
-
-    openModal({
-        title: t('ui_select_job', 'Select a job'),
-        cancelLabel: t('ui_close', 'Close'),
-        body: `
-            ${showSearch ? `
-                <div class="input-wrap" style="margin-bottom:16px">
-                    ${icon('search', 16)}
-                    <input class="input" type="text" id="job-search" placeholder="${esc(t('ui_search_jobs', 'Search jobs'))}" aria-label="${esc(t('ui_search_jobs', 'Search jobs'))}" autocomplete="off">
-                </div>` : ''}
-            <div class="rows" id="job-list-rows">${rows}</div>
-            <div id="job-list-empty" hidden>${emptyState('search', t('ui_no_jobs_match', 'No jobs match your search.'))}</div>
-        `,
-        onDismiss: closeUI
-    });
-
-    $('#job-search').on('input', function () {
-        const query = $(this).val().trim().toLowerCase();
-        let visible = 0;
-        $('#job-list-rows .row').each(function () {
-            const match = !query || String($(this).data('search')).indexOf(query) !== -1;
-            $(this).attr('hidden', !match);
-            if (match) visible++;
-        });
-        $('#job-list-empty').attr('hidden', visible > 0);
-    });
-}
-
-function openCreatePrompt() {
-    setMode('creator');
-    let idEdited = false;
-
-    openModal({
-        title: t('ui_create_job', 'Create job'),
-        desc: t('ui_create_job_desc', 'You can change the display name later. The job ID is permanent.'),
-        confirmLabel: t('ui_create_job', 'Create job'),
-        body: `
-            <div class="form">
-                <div class="field">
-                    <label class="label" for="create-label">${esc(t('ui_display_name', 'Display name'))}<span class="req" aria-hidden="true">*</span></label>
-                    <input class="input" type="text" id="create-label" autocomplete="off">
-                </div>
-                <div class="field">
-                    <label class="label" for="create-name">${esc(t('ui_job_id', 'Job ID'))}<span class="req" aria-hidden="true">*</span></label>
-                    <input class="input mono" type="text" id="create-name" autocomplete="off" spellcheck="false">
-                    <p class="helper">${esc(t('ui_job_id_help', 'Used with the setjob command. Lowercase, no spaces.'))}</p>
-                </div>
-            </div>
-        `,
-        onConfirm: function () {
-            if (requireFields(['#create-label', '#create-name'])) return false;
-            const label = $('#create-label').val().trim();
-            const name = slug($('#create-name').val());
-            isModifying = false;
-            currentJobName = name;
-            // Let the modal close before the editor takes focus
-            setTimeout(() => {
-                showUI();
-                setupCreatorMode({ label: label, job: name });
-                $('#job-label').trigger('focus');
-            }, 0);
-        },
-        onDismiss: closeUI
-    });
-
-    $('#create-name').on('input', () => { idEdited = true; });
-    $('#create-label').on('input', function () {
-        if (!idEdited) {
-            const id = $(this).val().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '');
-            $('#create-name').val(id);
-            if (id) clearFieldError('#create-name');
-        }
-    });
-}
-
-// ==========================================
-// PICKERS: GARAGE, HELIPAD, WARDROBE
-// ==========================================
-
-function setupVehiclePicker(mode, vehicles, jobName) {
-    const isHeli = mode === 'helipad';
-    setMode(mode);
-    $(`#view-${mode}`).addClass('active');
-    setPage(
-        isHeli ? t('ui_nav_helipad', 'Helipad') : t('ui_nav_garage', 'Garage'),
-        isHeli ? t('ui_helipad_pick_sub', 'Helicopters available at your rank.') : t('ui_garage_pick_sub', 'Vehicles available at your rank.')
-    );
-    $('#topbar-title').text(jobName || '');
-
-    const list = $(`#${mode}-vehicles-list`);
-    if (!vehicles.length) {
-        list.html(emptyState(isHeli ? 'helicopter' : 'car', isHeli
-            ? t('ui_no_helicopters_rank', 'No helicopters are available at your rank.')
-            : t('ui_no_vehicles_rank', 'No vehicles are available at your rank.')));
-        return;
-    }
-
-    list.empty();
-    vehicles.forEach((veh) => {
-        const row = $(`
-            <div class="row wraps">
-                <span class="swatch" style="background:${vehicleHex(veh)}"></span>
-                <div class="row-main">
-                    <span class="row-title" data-tip="${esc(veh.label)}">${esc(veh.label)}</span>
-                    <div class="row-meta">
-                        <span class="mono">${esc(veh.model)}</span>
-                        <span>${esc(rankText(veh.min_grade))}</span>
-                    </div>
-                </div>
-                <div class="row-actions">
-                    <button type="button" class="btn btn-secondary"><span class="btn-label">${esc(t('ui_take_out', 'Take out'))}</span></button>
-                </div>
-            </div>
-        `);
-        row.find('.btn').on('click', function () {
-            if (isHeli) {
-                post('spawnHelicopter', { vehicle: veh, helipad: datafaz.helipad });
-            } else {
-                post('spawnVehicle', { vehicle: veh, garage: datafaz.garage });
-            }
-            closeUI();
-        });
-        list.append(row);
-    });
-}
-
-function setupWardrobeMode(outfits, jobName, canManage) {
-    setMode('wardrobe');
-    $('#view-wardrobe').addClass('active');
-    setPage(t('ui_wardrobe', 'Wardrobe'), t('ui_wardrobe_sub', 'Uniforms saved for this job.'));
-    $('#topbar-title').text(jobName || '');
-    $('#wardrobe-save-current').attr('hidden', !canManage);
-
-    const list = $('#wardrobe-outfits-list');
-    const names = Object.keys(outfits || {});
-    if (!names.length) {
-        list.html(emptyState('shirt', canManage
-            ? t('ui_no_outfits_manage', 'No uniforms yet. Dress the way the uniform should look, then save your current outfit.')
-            : t('ui_no_outfits', 'No uniforms have been saved for this job yet.')));
-        return;
-    }
-
-    list.empty();
-    names.forEach((outfitName) => {
-        const outfitData = outfits[outfitName];
-        const row = $(`
-            <div class="row">
-                <div class="row-main">
-                    <span class="row-title" data-tip="${esc(outfitName)}">${esc(outfitName)}</span>
-                </div>
-                <div class="row-actions">
-                    <button type="button" class="btn btn-secondary" data-wear><span class="btn-label">${esc(t('ui_wear', 'Wear'))}</span></button>
-                    ${canManage ? iconButton('trash', t('ui_delete_outfit', 'Delete outfit'), 'data-delete-outfit') : ''}
-                </div>
-            </div>
-        `);
-
-        row.find('[data-wear]').on('click', function () {
-            post('wardrobeAction', { action: 'wearOutfit', job: currentJobName, outfitName: outfitName, outfitData: outfitData });
-            closeUI();
-        });
-
-        row.find('[data-delete-outfit]').on('click', function () {
-            openModal({
-                title: t('ui_delete_outfit_title', "Delete '%s'?", outfitName),
-                desc: t('ui_delete_outfit_body', 'Members of this job can no longer wear it.'),
-                confirmLabel: t('ui_delete_outfit', 'Delete outfit'),
-                danger: true,
-                onConfirm: function () {
-                    post('wardrobeAction', { action: 'deleteOutfit', job: currentJobName, outfitName: outfitName });
-                    closeUI();
-                }
-            });
-        });
-
-        list.append(row);
-    });
-}
-
-function promptSaveOutfit() {
-    openModal({
-        title: t('ui_save_outfit', 'Save current outfit'),
-        desc: t('ui_save_outfit_desc', 'Saves what you are wearing now as a uniform for this job.'),
-        confirmLabel: t('ui_save_outfit_btn', 'Save outfit'),
-        body: `
-            <div class="field">
-                <label class="label" for="outfit-name">${esc(t('ui_outfit_name', 'Outfit name'))}<span class="req" aria-hidden="true">*</span></label>
-                <input class="input" type="text" id="outfit-name" autocomplete="off">
-            </div>
-        `,
-        onConfirm: function () {
-            const name = $('#outfit-name').val().trim();
-            if (name.length < 3) {
-                setFieldError('#outfit-name', t('ui_err_outfit_name', 'Use at least 3 characters.'));
-                $('#outfit-name').trigger('focus');
-                return false;
-            }
-            post('wardrobeAction', { action: 'saveOutfit', job: currentJobName, outfitName: name });
-            closeUI();
-        }
-    });
-}
-
-// ==========================================
 // BINDINGS
 // ==========================================
 
@@ -1418,11 +1179,6 @@ $(document).ready(function () {
     $('#modal-close, #modal-cancel').on('click', dismissModal);
     $('#modal-confirm').on('click', confirmModal);
     $('#modal').on('mousedown', function (e) { if (e.target === this) dismissModal(); });
-    $('#modal-body').on('click', '[data-select-job]', function () {
-        const job = $(this).data('select-job');
-        closeModal();
-        post('editSelectedJob', { job: job });
-    });
 
     // Clear an error as soon as the field changes
     $(document).on('input change', '.field.has-error .input, .field.has-error input', function () {
@@ -1513,43 +1269,16 @@ $(document).ready(function () {
         editGrade(parseInt($(this).data('index'), 10));
     });
 
-    // Wardrobe
-    $('#wardrobe-open-ped').on('click', function () {
-        post('wardrobeAction', { action: 'openPedMenu', job: currentJobName });
-        closeUI();
-    });
-    $('#wardrobe-save-current').on('click', promptSaveOutfit);
-
     // Messages from the Lua client
     window.addEventListener('message', function (event) {
         const item = event.data || {};
 
-        if (item.action === 'open') {
+        if (item.action === 'open' && item.mode === 'creator') {
             readOpenPayload(item);
             isModifying = item.isModifying || false;
-            currentJobName = item.job || '';
             closeModal();
             showUI();
-
-            if (item.mode === 'creator') {
-                setupCreatorMode(item.data);
-            } else if (item.mode === 'garage' || item.mode === 'helipad') {
-                setupVehiclePicker(item.mode, item.vehicles || [], item.job);
-            } else if (item.mode === 'wardrobe') {
-                setupWardrobeMode(item.outfits || {}, item.job, item.canManage);
-            }
-        }
-
-        if (item.action === 'openJobList') {
-            readOpenPayload(item);
-            showUI(true);
-            openJobList(item.jobs || []);
-        }
-
-        if (item.action === 'openCreatePrompt') {
-            readOpenPayload(item);
-            showUI(true);
-            openCreatePrompt();
+            setupCreatorMode(item.data);
         }
 
         if (item.action === 'close') {
