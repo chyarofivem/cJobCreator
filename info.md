@@ -9,7 +9,7 @@
 
 ## Overview
 
-cJobCreator is a dynamic job management system for FiveM servers (both ESX and QB-Core/QBox). It allows admins to create, edit, and delete jobs at runtime — without restarting the server — through a premium glassmorphic NUI (HTML/JS) interface. All job data is persisted in a MySQL database and hot-reloaded on all clients when changes are made.
+cJobCreator is a dynamic job management system for FiveM servers (both ESX and QB-Core/QBox). It allows admins to create, edit, and delete jobs at runtime — without restarting the server — through an NUI (HTML/JS) interface. All job data is persisted in a MySQL database and hot-reloaded on all clients when changes are made.
 
 Each job can have:
 - A **boss menu** marker (opens framework-native boss panel)

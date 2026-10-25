@@ -67,7 +67,8 @@ function OpenWardrobe(job)
                 job = job,
                 canManage = canManageOutfits,
                 outfits = outfits,
-                locales = GetLocalesTable()
+                locales = GetLocalesTable(),
+                accent = Config.AccentColor
             })
         end, job)
     end, job)
@@ -113,7 +114,8 @@ function OpenGarage(data, job)
             mode = 'garage',
             vehicles = availableVehicles,
             job = job,
-            locales = GetLocalesTable()
+            locales = GetLocalesTable(),
+            accent = Config.AccentColor
         })
     end, job, 'car')
 end
@@ -281,7 +283,8 @@ function OpenHelipad(data, job)
             mode = 'helipad',
             vehicles = availableVehicles,
             job = job,
-            locales = GetLocalesTable()
+            locales = GetLocalesTable(),
+            accent = Config.AccentColor
         })
     end, job, 'heli')
 end
@@ -418,7 +421,8 @@ function OpenMenu(label, job, modifica, selezionata)
                         mode = 'creator',
                         isModifying = true,
                         data = datafaz,
-                        locales = GetLocalesTable()
+                        locales = GetLocalesTable(),
+                        accent = Config.AccentColor
                     })
                     break
                 end
@@ -440,7 +444,8 @@ function OpenMenu(label, job, modifica, selezionata)
             mode = 'creator',
             isModifying = false,
             data = datafaz,
-            locales = GetLocalesTable()
+            locales = GetLocalesTable(),
+            accent = Config.AccentColor
         })
     end
 end
@@ -596,7 +601,8 @@ RegisterNetEvent('hPoslovi:client:openEditMenu', function()
         SendNUIMessage({
             action = 'openJobList',
             jobs = data,
-            locales = GetLocalesTable()
+            locales = GetLocalesTable(),
+            accent = Config.AccentColor
         })
     end)
 end)
@@ -605,7 +611,8 @@ RegisterNetEvent('hPoslovi:client:openCreateMenu', function()
     SetNuiFocus(true, true)
     SendNUIMessage({
         action = 'openCreatePrompt',
-        locales = GetLocalesTable()
+        locales = GetLocalesTable(),
+        accent = Config.AccentColor
     })
 end)
 
