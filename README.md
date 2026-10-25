@@ -1,15 +1,17 @@
-# cJobCreator - Premium Glassmorphic Job & Faction Manager
+# cJobCreator - Job & Faction Manager
 
-`cJobCreator` is a premium, state-of-the-art job and faction creation system for FiveM (ESX). It replaces standard console/chat menus and basic UI elements with a modern, high-performance, double-pane glassmorphic NUI interface designed following advanced web styling standards (harmony of custom colors, smooth backdrop blurs, and hover micro-animations).
+`cJobCreator` is a premium, state-of-the-art job and faction creation system for FiveM (ESX). It replaces standard console/chat menus and basic UI elements with a calm, dark NUI job editor for admins and ox_lib menus for everything players use.
 
 ---
 
 ## 🎯 Key Features
 
-### 1. Modern Glassmorphic NUI
-- **Double-Pane Layout**: Left-pane sidebar navigation and right-pane action area.
-- **Visual Design**: Curated dark palette with sleek `#00ADED` accents, translucent card components, responsive layouts, and modern typography (`Outfit` font).
-- **Zero Third-Party UI Blockers**: Replaces old dialogs with custom-built HTML overlay modals for inputs, confirmations, and alerts, keeping users fully immersed.
+### 1. Flat, dark NUI
+- **Sidebar layout**: Sections (General, Storage, Garage, Helipad, Ranks) in a sidebar with live counts; below 1024px it becomes a drawer. Saving is always one click away in the page header.
+- **Visual design**: Near-black surfaces, one accent colour, Space Grotesk for text and JetBrains Mono for IDs, models, plates and coordinates.
+- **Configurable accent**: Set `Config.AccentColor` to a preset (`blue`, `indigo`, `violet`, `purple`, `fuchsia`, `pink`, `rose`, `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `emerald`, `teal`, `cyan`, `sky`) or a hex colour. Custom colours are darkened until white text on them is readable.
+- **Inline feedback**: Field-level validation, undo for removals before saving, and confirmations only for actions that change the database right away.
+- **ox_lib menus**: The wardrobe, garage, helipad, the `/editjob` job picker and the `/makejob` prompt use ox_lib context menus and input dialogs; only the full job editor is NUI.
 
 ### 2. Drag & Drop Grade Reordering
 - **Discord-like Priority Sorting**: Allows administrators to drag and drop grades to rearrange their hierarchical order.
@@ -104,8 +106,8 @@ Config.AdminGroups = {
 
 ## 📝 Administrative Commands
 
-* **`/makejob`**: Opens the NUI Creator screen to register a new faction/job.
-* **`/editjob`**: Opens the NUI Job Manager screen where you can select, modify, or permanently delete registered factions.
+* **`/makejob`**: Asks for a display name and job ID (ox_lib dialog), then opens the NUI editor to register the new job.
+* **`/editjob`**: Lists registered jobs in an ox_lib menu; picking one opens the NUI editor to modify or permanently delete it.
 
 ---
 

@@ -9,11 +9,11 @@
 
 ## Overview
 
-cJobCreator is a dynamic job management system for FiveM servers (both ESX and QB-Core/QBox). It allows admins to create, edit, and delete jobs at runtime — without restarting the server — through a premium glassmorphic NUI (HTML/JS) interface. All job data is persisted in a MySQL database and hot-reloaded on all clients when changes are made.
+cJobCreator is a dynamic job management system for FiveM servers (both ESX and QB-Core/QBox). It allows admins to create, edit, and delete jobs at runtime — without restarting the server — through an NUI (HTML/JS) interface. All job data is persisted in a MySQL database and hot-reloaded on all clients when changes are made.
 
 Each job can have:
 - A **boss menu** marker (opens framework-native boss panel)
-- A **wardrobe** marker (opens `illenium-appearance` outfit picker)
+- A **wardrobe** marker (opens an ox_lib menu of the job's `illenium-appearance` outfits)
 - A **garage** with two positions: a *retrieve* marker (opens car vehicle spawn menu) and a *spawn* position (where cars appear)
 - A **helipad** with two positions: a *retrieve* marker (opens helicopter spawn menu) and a *spawn* position (where helicopters appear)
 - Up to N **inventory** markers (opens `ox_inventory` stashes)
@@ -171,8 +171,8 @@ Stashes are registered as `ox_inventory` stashes with the key `{job_name}{invent
 |------|--------|-------------|
 | `hPoslovi:client:refreshJobs` | `-1` (all) | Tells all clients to re-fetch job data and rebuild markers |
 | `hPoslovi:client:refreshVehicles` | `-1` (all) | Notifies clients that vehicle list changed |
-| `hPoslovi:client:openEditMenu` | `source` | Opens job list NUI for admin |
-| `hPoslovi:client:openCreateMenu` | `source` | Opens create-job prompt NUI for admin |
+| `hPoslovi:client:openEditMenu` | `source` | Opens the job list (ox_lib context menu) for admin |
+| `hPoslovi:client:openCreateMenu` | `source` | Opens the create-job prompt (ox_lib input dialog) for admin |
 
 ---
 
@@ -196,17 +196,17 @@ For each job in `data`:
 
 ### NUI Callbacks (`RegisterNUICallback`)
 
-All callback handlers correspond to JS `$.post` actions, routing data to appropriate English client-side handlers.
+Used only by the job editor: `close`, `getCoords`, `addVehicle`, `deleteVehicle`, `getJobVehicles`, `getJobHeliVehicles`, `addHeliVehicle`, `saveJob`, `deleteJob`. The wardrobe, garage, helipad, job picker and create prompt are ox_lib menus handled entirely in Lua.
 
 ### Key Client Functions
 
 - **`CreateMarkers(data)`** — Rebuilds all job markers from a full job data array.
-- **`OpenGarage(data, job)`** — Fetches `car` vehicles for the job and opens the NUI garage menu.
-- **`OpenHelipad(data, job)`** — Fetches `heli` vehicles for the job and opens the NUI helipad menu.
+- **`OpenGarage(data, job)`** — Fetches `car` vehicles for the job and opens an ox_lib context menu of the vehicles the player's rank can take out.
+- **`OpenHelipad(data, job)`** — Fetches `heli` vehicles for the job and opens an ox_lib context menu of the helicopters the player's rank can take out.
 - **`SpawnJobVehicle(vehicleData, garageData)`** — Validates grade, spawn point, model, then spawns the car and warps the player.
 - **`SpawnJobHelicopter(vehicleData, helipadData)`** — Validates grade, spawn point, model, then spawns the helicopter and warps the player.
 - **`OpenMenu(label, job, isModifying, selected)`** — Opens the NUI creator/editor.
-- **`OpenWardrobe(job)`** — Opens the outfit wardrobe NUI.
+- **`OpenWardrobe(job)`** — Opens the wardrobe ox_lib context menu (wear, change appearance, and for boss-grade members save/delete outfits).
 
 ---
 

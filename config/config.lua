@@ -7,6 +7,15 @@ Config.Debug = false -- Set to true to enable debug console logs
 Config.Locale = 'en' -- Available: 'en', 'hr'
 
 -- ===========================================
+-- INTERFACE
+-- ===========================================
+-- Accent colour of the menus. Use a preset name: blue (default), indigo, violet, purple,
+-- fuchsia, pink, rose, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky.
+-- Or a custom hex colour such as '#0ea5e9'; a colour too light for white text is darkened
+-- until the text is readable.
+Config.AccentColor = 'blue'
+
+-- ===========================================
 -- MARKER SETTINGS
 -- ===========================================
 Config.MarkerType = 21 -- Set to -1 for custom markers

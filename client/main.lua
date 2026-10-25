@@ -50,30 +50,204 @@ local function GetLocalesTable()
     return {}
 end
 
--- WARDROBE FUNCTION - REDESIGNED WITH ILLENIUM APPEARANCE & NUI
+-- =======================================================
+-- OX_LIB MENUS (wardrobe, garage, helipad)
+-- =======================================================
+
+local WARDROBE_MENU = 'hPoslovi_wardrobe'
+local WARDROBE_DELETE_MENU = 'hPoslovi_wardrobe_delete'
+local GARAGE_MENU = 'hPoslovi_garage'
+local HELIPAD_MENU = 'hPoslovi_helipad'
+
+-- HELPER: Sorted keys of an outfits table
+local function SortedOutfitNames(outfits)
+    local names = {}
+    for name in pairs(outfits or {}) do
+        names[#names + 1] = name
+    end
+    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    return names
+end
+
+-- HELPER: Close one of our context menus (used when walking away from a marker)
+local function HideMenu(menuId)
+    if lib.getOpenContextMenu() == menuId then
+        lib.hideContext(false)
+    end
+end
+
+local function WearOutfit(outfitName, outfitData)
+    exports['illenium-appearance']:setPlayerAppearance(outfitData)
+    Framework.Notify(locale('outfit_applied', outfitName))
+end
+
+local function PromptSaveOutfit(job)
+    local input = lib.inputDialog(locale('ui_save_outfit'), {
+        {
+            type = 'input',
+            label = locale('ui_outfit_name'),
+            description = locale('ui_save_outfit_desc'),
+            required = true,
+            min = 3,
+            max = 50
+        }
+    })
+    if not input or not input[1] then return end
+
+    local outfitName = input[1]:match('^%s*(.-)%s*$')
+    if #outfitName < 3 then
+        Framework.Notify(locale('ui_err_outfit_name'))
+        return
+    end
+
+    local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
+    if appearance then
+        TriggerServerEvent('hPoslovi:server:saveJobOutfit', job, outfitName, appearance)
+    else
+        Framework.Notify(locale('failed_appearance'))
+    end
+end
+
+local function ConfirmDeleteOutfit(job, outfitName)
+    local answer = lib.alertDialog({
+        header = locale('ui_delete_outfit_title', outfitName),
+        content = locale('ui_delete_outfit_body'),
+        centered = true,
+        cancel = true,
+        labels = { confirm = locale('ui_delete_outfit'), cancel = locale('ui_cancel') }
+    })
+    if answer == 'confirm' then
+        TriggerServerEvent('hPoslovi:server:deleteJobOutfit', job, outfitName)
+    end
+end
+
+-- WARDROBE FUNCTION - ILLENIUM APPEARANCE + OX_LIB CONTEXT MENU
 function OpenWardrobe(job)
     local jobName, jobGrade = Framework.GetPlayerJob()
-    
+
     -- Get boss grade for this job from database via callback
     lib.callback('hPoslovi:server:getBossGrade', false, function(bossGrade)
         local canManageOutfits = bossGrade and jobGrade >= bossGrade
-        
-        -- Get outfits
+
         lib.callback('hPoslovi:server:getJobOutfits', false, function(outfits)
-            SetNuiFocus(true, true)
-            SendNUIMessage({
-                action = 'open',
-                mode = 'wardrobe',
-                job = job,
-                canManage = canManageOutfits,
-                outfits = outfits,
-                locales = GetLocalesTable()
+            outfits = outfits or {}
+            local names = SortedOutfitNames(outfits)
+            local options = {}
+
+            for _, outfitName in ipairs(names) do
+                options[#options + 1] = {
+                    title = outfitName,
+                    icon = 'shirt',
+                    onSelect = function()
+                        WearOutfit(outfitName, outfits[outfitName])
+                    end
+                }
+            end
+
+            if #names == 0 then
+                options[#options + 1] = {
+                    title = canManageOutfits and locale('ui_no_outfits_manage') or locale('ui_no_outfits'),
+                    disabled = true
+                }
+            end
+
+            options[#options + 1] = {
+                title = locale('ui_change_appearance'),
+                description = locale('ui_change_appearance_desc'),
+                icon = 'user-pen',
+                onSelect = function()
+                    TriggerEvent('illenium-appearance:client:openClothingShop', true)
+                end
+            }
+
+            if canManageOutfits then
+                options[#options + 1] = {
+                    title = locale('ui_save_outfit'),
+                    description = locale('ui_save_outfit_desc'),
+                    icon = 'floppy-disk',
+                    onSelect = function()
+                        PromptSaveOutfit(job)
+                    end
+                }
+
+                if #names > 0 then
+                    local deleteOptions = {}
+                    for _, outfitName in ipairs(names) do
+                        deleteOptions[#deleteOptions + 1] = {
+                            title = outfitName,
+                            icon = 'trash',
+                            iconColor = '#f87171',
+                            onSelect = function()
+                                ConfirmDeleteOutfit(job, outfitName)
+                            end
+                        }
+                    end
+
+                    lib.registerContext({
+                        id = WARDROBE_DELETE_MENU,
+                        title = locale('ui_delete_outfit'),
+                        menu = WARDROBE_MENU,
+                        options = deleteOptions
+                    })
+
+                    options[#options + 1] = {
+                        title = locale('ui_delete_outfit'),
+                        description = locale('ui_delete_outfit_desc'),
+                        icon = 'trash',
+                        menu = WARDROBE_DELETE_MENU
+                    }
+                end
+            end
+
+            lib.registerContext({
+                id = WARDROBE_MENU,
+                title = locale('ui_wardrobe'),
+                options = options
             })
+            lib.showContext(WARDROBE_MENU)
         end, job)
     end, job)
 end
 
--- GARAGE FUNCTION (Player Usage) - NUI VERSION
+-- HELPER: Context menu of the vehicles a player's rank can take out
+local function ShowVehicleMenu(menuId, title, vehicles, icon, emptyText, onPick)
+    local _, jobGrade = Framework.GetPlayerJob()
+    local options = {}
+
+    for _, vehicle in ipairs(vehicles or {}) do
+        local minGrade = tonumber(vehicle.min_grade) or 0
+        if jobGrade >= minGrade then
+            local rank = minGrade > 0 and locale('ui_from_rank', minGrade) or locale('ui_any_rank')
+            local r = tonumber(vehicle.color_r) or 255
+            local g = tonumber(vehicle.color_g) or 255
+            local b = tonumber(vehicle.color_b) or 255
+            local metadata = nil
+            if vehicle.plate and vehicle.plate ~= '' then
+                metadata = { { label = locale('ui_plate'), value = vehicle.plate } }
+            end
+
+            options[#options + 1] = {
+                title = vehicle.label,
+                description = ('%s · %s'):format(vehicle.model, rank),
+                icon = icon,
+                iconColor = ('#%02x%02x%02x'):format(r, g, b),
+                metadata = metadata,
+                onSelect = function()
+                    onPick(vehicle)
+                end
+            }
+        end
+    end
+
+    if #options == 0 then
+        options[1] = { title = emptyText, disabled = true }
+    end
+
+    lib.registerContext({ id = menuId, title = title, options = options })
+    lib.showContext(menuId)
+end
+
+-- GARAGE FUNCTION (Player Usage) - OX_LIB CONTEXT MENU
 function OpenGarage(data, job)
     local jobData = nil
     for k,v in pairs(data) do
@@ -96,25 +270,9 @@ function OpenGarage(data, job)
 
     -- Load car vehicles from database (car type only)
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local jobName, jobGrade = Framework.GetPlayerJob()
-        local availableVehicles = {}
-        
-        if vehicles and #vehicles > 0 then
-            for idx, vehicle in ipairs(vehicles) do
-                if jobGrade >= (tonumber(vehicle.min_grade) or 0) then
-                    table.insert(availableVehicles, vehicle)
-                end
-            end
-        end
-
-        SetNuiFocus(true, true)
-        SendNUIMessage({
-            action = 'open',
-            mode = 'garage',
-            vehicles = availableVehicles,
-            job = job,
-            locales = GetLocalesTable()
-        })
+        ShowVehicleMenu(GARAGE_MENU, locale('ui_nav_garage'), vehicles, 'car', locale('ui_no_vehicles_rank'), function(vehicle)
+            SpawnJobVehicle(vehicle, jobData.garage)
+        end)
     end, job, 'car')
 end
 
@@ -241,7 +399,7 @@ function SpawnJobVehicle(vehicleData, garageData)
     Framework.Notify(locale('vehspawned'))
 end
 
--- HELIPAD GARAGE FUNCTION (Player Usage) - NUI VERSION
+-- HELIPAD GARAGE FUNCTION (Player Usage) - OX_LIB CONTEXT MENU
 function OpenHelipad(data, job)
     local jobData = nil
     for k,v in pairs(data) do
@@ -264,25 +422,9 @@ function OpenHelipad(data, job)
 
     -- Load helicopter vehicles from database (heli type only)
     lib.callback('hPoslovi:server:getJobVehicles', false, function(vehicles)
-        local jobName, jobGrade = Framework.GetPlayerJob()
-        local availableVehicles = {}
-        
-        if vehicles and #vehicles > 0 then
-            for idx, vehicle in ipairs(vehicles) do
-                if jobGrade >= (tonumber(vehicle.min_grade) or 0) then
-                    table.insert(availableVehicles, vehicle)
-                end
-            end
-        end
-
-        SetNuiFocus(true, true)
-        SendNUIMessage({
-            action = 'open',
-            mode = 'helipad',
-            vehicles = availableVehicles,
-            job = job,
-            locales = GetLocalesTable()
-        })
+        ShowVehicleMenu(HELIPAD_MENU, locale('ui_nav_helipad'), vehicles, 'helicopter', locale('ui_no_helicopters_rank'), function(vehicle)
+            SpawnJobHelicopter(vehicle, jobData.helipad)
+        end)
     end, job, 'heli')
 end
 
@@ -418,7 +560,8 @@ function OpenMenu(label, job, modifica, selezionata)
                         mode = 'creator',
                         isModifying = true,
                         data = datafaz,
-                        locales = GetLocalesTable()
+                        locales = GetLocalesTable(),
+                        accent = Config.AccentColor
                     })
                     break
                 end
@@ -440,7 +583,8 @@ function OpenMenu(label, job, modifica, selezionata)
             mode = 'creator',
             isModifying = false,
             data = datafaz,
-            locales = GetLocalesTable()
+            locales = GetLocalesTable(),
+            accent = Config.AccentColor
         })
     end
 end
@@ -520,70 +664,6 @@ RegisterNUICallback('deleteJob', function(data, cb)
     cb('ok')
 end)
 
-RegisterNUICallback('editSelectedJob', function(data, cb)
-    if data and data.job then
-        OpenMenu("", data.job, true, nil)
-    end
-    cb('ok')
-end)
-
-RegisterNUICallback('spawnVehicle', function(data, cb)
-    if data and data.vehicle then
-        local jobName, _ = Framework.GetPlayerJob()
-        local garageData = data.garage
-        if (not garageData or not garageData.pos2) and AllJobsData then
-            for _, v in pairs(AllJobsData) do
-                if v.job == jobName then
-                    garageData = v.garage
-                    break
-                end
-            end
-        end
-        SpawnJobVehicle(data.vehicle, garageData)
-    end
-    cb('ok')
-end)
-
-RegisterNUICallback('spawnHelicopter', function(data, cb)
-    if data and data.vehicle then
-        local jobName, _ = Framework.GetPlayerJob()
-        local helipadData = data.helipad
-        if (not helipadData or not helipadData.pos2) and AllJobsData then
-            for _, v in pairs(AllJobsData) do
-                if v.job == jobName then
-                    helipadData = v.helipad
-                    break
-                end
-            end
-        end
-        SpawnJobHelicopter(data.vehicle, helipadData)
-    end
-    cb('ok')
-end)
-
-RegisterNUICallback('wardrobeAction', function(data, cb)
-    if not data then cb('ok') return end
-
-    if data.action == 'openPedMenu' then
-        TriggerEvent("illenium-appearance:client:openClothingShop", true)
-    elseif data.action == 'saveOutfit' then
-        local appearance = exports['illenium-appearance']:getPedAppearance(PlayerPedId())
-        if appearance then
-            TriggerServerEvent('hPoslovi:server:saveJobOutfit', data.job, data.outfitName, appearance)
-        else
-            Framework.Notify(locale('failed_appearance'))
-        end
-    elseif data.action == 'wearOutfit' then
-        if data.outfitData then
-            exports['illenium-appearance']:setPlayerAppearance(data.outfitData)
-            Framework.Notify(locale('outfit_applied', data.outfitName))
-        end
-    elseif data.action == 'deleteOutfit' then
-        TriggerServerEvent('hPoslovi:server:deleteJobOutfit', data.job, data.outfitName)
-    end
-    cb('ok')
-end)
-
 -- EVENTS
 RegisterNetEvent('hPoslovi:client:openEditMenu', function()
     lib.callback('hPoslovi:server:getAllJobs', false, function(data)
@@ -591,22 +671,50 @@ RegisterNetEvent('hPoslovi:client:openEditMenu', function()
             Framework.Notify(locale('no_jobs_found'))
             return
         end
-        
-        SetNuiFocus(true, true)
-        SendNUIMessage({
-            action = 'openJobList',
-            jobs = data,
-            locales = GetLocalesTable()
+
+        local jobs = {}
+        for _, v in pairs(data) do
+            jobs[#jobs + 1] = v
+        end
+        table.sort(jobs, function(a, b) return tostring(a.label):lower() < tostring(b.label):lower() end)
+
+        local options = {}
+        for _, v in ipairs(jobs) do
+            options[#options + 1] = {
+                title = v.label,
+                description = v.job,
+                icon = 'briefcase',
+                arrow = true,
+                onSelect = function()
+                    OpenMenu('', v.job, true, nil)
+                end
+            }
+        end
+
+        lib.registerContext({
+            id = 'hPoslovi_select_job',
+            title = locale('ui_select_job'),
+            options = options
         })
+        lib.showContext('hPoslovi_select_job')
     end)
 end)
 
 RegisterNetEvent('hPoslovi:client:openCreateMenu', function()
-    SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openCreatePrompt',
-        locales = GetLocalesTable()
+    local input = lib.inputDialog(locale('ui_create_job'), {
+        { type = 'input', label = locale('ui_display_name'), required = true },
+        { type = 'input', label = locale('ui_job_id'), description = locale('ui_job_id_help'), required = true }
     })
+    if not input then return end
+
+    local label = (input[1] or ''):match('^%s*(.-)%s*$')
+    local name = (input[2] or ''):lower():gsub('%s+', '')
+    if label == '' or name == '' then
+        Framework.Notify(locale('compile'))
+        return
+    end
+
+    OpenMenu(label, name, false, nil)
 end)
 
 RegisterNetEvent('hPoslovi:client:refreshJobs', function()
@@ -743,6 +851,10 @@ function CreateMarkers(data)
                 textureDict = Config.MarkerYTD,
                 action = function()
                     OpenWardrobe(v.job)
+                end,
+                onExit = function()
+                    HideMenu(WARDROBE_MENU)
+                    HideMenu(WARDROBE_DELETE_MENU)
                 end
             })
         end
@@ -767,8 +879,7 @@ function CreateMarkers(data)
                     OpenGarage(data, v.job)
                 end,
                 onExit = function()
-                    SetNuiFocus(false, false)
-                    SendNUIMessage({ action = 'close' })
+                    HideMenu(GARAGE_MENU)
                 end
             })
             
@@ -794,10 +905,6 @@ function CreateMarkers(data)
                         else
                             Framework.Notify(locale('notveh'))
                         end
-                    end,
-                    onExit = function()
-                        SetNuiFocus(false, false)
-                        SendNUIMessage({ action = 'close' })
                     end
                 })
             end
@@ -824,8 +931,7 @@ function CreateMarkers(data)
                     OpenHelipad(data, v.job)
                 end,
                 onExit = function()
-                    SetNuiFocus(false, false)
-                    SendNUIMessage({ action = 'close' })
+                    HideMenu(HELIPAD_MENU)
                 end
             })
             
@@ -851,10 +957,6 @@ function CreateMarkers(data)
                         else
                             Framework.Notify(locale('notveh'))
                         end
-                    end,
-                    onExit = function()
-                        SetNuiFocus(false, false)
-                        SendNUIMessage({ action = 'close' })
                     end
                 })
             end
